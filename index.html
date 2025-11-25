@@ -41,13 +41,17 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   </head>
-  <body
-    class="min-h-screen flex items-center justify-center px-4 py-6 bg-gray-50"
-  >
+  <body class="min-h-screen bg-gray-50">
+
     <div
-      class="w-full max-w-6xl bg-white rounded-3xl shadow-2xl shadow-gray-200/80 overflow-hidden grid md:grid-cols-2 border border-gray-200"
-    >
-      <!-- Left / Hero -->
+        </head>
+  <body class="min-h-screen bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div
+        class="w-full max-w-6xl bg-white rounded-3xl shadow-2xl shadow-gray-200/80 overflow-hidden grid md:grid-cols-2 border border-gray-200"
+      >
+        <!-- Left / Hero -->
+
       <div
         class="relative bg-white text-gray-900 p-8 md:p-10 flex flex-col justify-between border-b md:border-b-0 md:border-r border-gray-200"
       >
@@ -71,7 +75,7 @@
             students getting ready for the AP exam.
           </p>
 
-          <div class="mt-6 grid grid-cols-3 gap-3 text-[11px]">
+          <div class="mt-6 grid grid-cols-3 gap-3 text-sm">
             <div
               class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm"
             >
@@ -95,7 +99,7 @@
           </div>
         </div>
 
-        <div class="relative z-10 mt-6 text-[11px] text-gray-500">
+        <div class="relative z-10 mt-6 text-sm text-gray-500">
           Built for teachers and students · FERPA-aware by design
         </div>
       </div>
@@ -105,11 +109,11 @@
         <!-- Auth View -->
         <div id="auth-view" class="flex-1 flex flex-col">
           <div class="mb-4">
-            <p class="text-[11px] font-medium text-gray-600 mb-1">
+            <p class="text-sm font-medium text-gray-600 mb-1">
               You are signing in as
             </p>
             <div
-              class="inline-flex rounded-full bg-gray-100 p-1 text-[11px] border border-gray-200"
+              class="inline-flex rounded-full bg-gray-100 p-1 text-sm border border-gray-200"
             >
               <button
                 id="role-student"
@@ -131,7 +135,7 @@
           </div>
 
           <div
-            class="mb-3 flex items-center gap-2 text-[11px] text-gray-600"
+            class="mb-3 flex items-center gap-2 text-sm text-gray-600"
           >
             <label class="inline-flex items-center gap-1 cursor-pointer">
               <input
@@ -154,14 +158,14 @@
             </label>
           </div>
 
-          <form id="auth-form" class="space-y-3 text-[11px]">
+          <form id="auth-form" class="space-y-3 text-sm">
             <div>
               <label class="block text-gray-700 mb-1">Email</label>
               <input
                 id="auth-email"
                 type="email"
                 required
-                class="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500"
+                class="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500"
               />
             </div>
             <div>
@@ -171,42 +175,42 @@
                 type="password"
                 required
                 minlength="6"
-                class="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500"
+                class="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500"
               />
             </div>
             <p
               id="auth-error"
-              class="hidden text-[11px] text-red-600"
+              class="hidden text-sm text-red-600"
             ></p>
             <button
               type="submit"
-              class="w-full mt-1 inline-flex items-center justify-center px-3 py-2 rounded-xl bg-blue-600 text-white text-[11px] font-medium hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/80"
+              class="w-full mt-1 inline-flex items-center justify-center px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/80"
             >
               Continue
             </button>
           </form>
 
           <div
-            class="mt-4 border-t border-gray-200 pt-3 space-y-2 text-[11px]"
+            class="mt-4 border-t border-gray-200 pt-3 space-y-2 text-sm"
           >
             <p class="text-gray-600">Or jump into a demo account:</p>
             <div class="grid grid-cols-2 gap-2">
               <button
                 id="demo-student"
                 type="button"
-                class="px-3 py-1.5 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 text-[11px] shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/80"
+                class="px-3 py-1.5 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/80"
               >
                 Demo student
               </button>
               <button
                 id="demo-teacher"
                 type="button"
-                class="px-3 py-1.5 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 text-[11px] shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/80"
+                class="px-3 py-1.5 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/80"
               >
                 Demo teacher
               </button>
             </div>
-            <p class="text-[10px] text-gray-500">
+            <p class="text-xs text-gray-500">
               Demo data is shared across users and resets periodically.
             </p>
           </div>
@@ -215,12 +219,12 @@
         <!-- App View -->
         <div id="app-view" class="hidden flex-1 flex flex-col min-h-[420px]">
           <!-- Top bar -->
-          <div class="flex items-center justify-between mb-3 text-[11px]">
+          <div class="flex items-center justify-between mb-3 text-sm">
             <div>
               <p class="text-xs font-semibold text-gray-900">
                 AP Psychology Trainer
               </p>
-              <p id="user-subtitle" class="text-[11px] text-gray-500"></p>
+              <p id="user-subtitle" class="text-sm text-gray-500"></p>
             </div>
             <div class="flex items-center gap-2">
               <span
@@ -235,7 +239,7 @@
               <button
                 id="logout-btn"
                 type="button"
-                class="px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500/80"
+                class="px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/80"
               >
                 Log out
               </button>
@@ -243,21 +247,32 @@
           </div>
 
           <!-- Tabs -->
+                    <!-- Tabs -->
+          <!-- Tabs -->
           <div
-            id="tab-strip"
-            class="flex gap-1 mb-3 text-[11px] bg-gray-100 rounded-xl p-1 border border-gray-200"
-          ></div>
+  id="tab-strip"
+  class="flex gap-1 mb-4 text-sm bg-gray-100 rounded-xl p-1.5 border border-gray-200"
+></div>
+
 
           <!-- Content -->
           <div
-            id="tab-content"
-            class="flex-1 bg-white border border-gray-200 rounded-2xl p-3 overflow-auto text-[11px]"
-          ></div>
-        </div>
-      </div>
-    </div>
-<!-- Individual Student Progress Modal -->
-<div
+  id="tab-content"
+  class="flex-1 bg-white border border-gray-200 rounded-2xl p-4 md:p-5 overflow-auto text-sm"
+></div>
+
+        </div> <!-- end right/app column -->
+      </div>   <!-- end main grid -->
+    </div>     <!-- end main card -->
+  </div>       <!-- end outer wrapper (max-w-7xl) -->
+
+  <!-- Individual Student Progress Modal -->
+  <div
+    id="student-progress-overlay"
+    class="fixed inset-0 bg-black/40 z-40 hidden items-center justify-center"
+  >
+    ...
+
   id="student-progress-overlay"
   class="fixed inset-0 bg-black/40 z-40 hidden items-center justify-center"
 >
@@ -284,9 +299,10 @@
       </button>
     </div>
     <div
-      id="student-progress-body"
-      class="p-4 space-y-3 text-[11px] overflow-y-auto"
-    >
+  id="student-progress-body"
+  class="p-4 space-y-4 text-sm overflow-y-auto"
+>
+
       <!-- Filled by JS -->
     </div>
   </div>
@@ -315,9 +331,10 @@
       </button>
     </div>
     <div
-      id="question-library-body"
-      class="p-3 space-y-2 text-[11px] overflow-y-auto"
-    >
+  id="question-library-body"
+  class="p-4 space-y-3 text-sm overflow-y-auto"
+>
+
       <!-- Filled by JS -->
     </div>
   </div>
@@ -372,7 +389,7 @@
           };
           const div = createEl(
             "div",
-            `toast-banner fixed top-3 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-white text-[11px] shadow-md ${
+            `toast-banner fixed top-3 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-white text-sm shadow-md ${
               colors[type] || colors.info
             }`,
             [message]
@@ -388,7 +405,7 @@
           "div",
           "rounded-xl p-3 shadow-sm bg-blue-600 text-white flex flex-col justify-between",
           [
-            createEl("p", "text-[10px] text-blue-100 mb-1 font-medium", [
+            createEl("p", "text-xs text-blue-100 mb-1 font-medium", [
               label,
             ]),
             createEl("p", "text-sm font-semibold", [String(value)]),
@@ -402,7 +419,7 @@
         wrapper.appendChild(
           createEl(
             "div",
-            "flex justify-between text-[11px] text-gray-700 mb-0.5",
+            "flex justify-between text-sm text-gray-700 mb-0.5",
             [
               `Unit ${unit}`,
               total != null ? `${pct}% · ${total} Q` : `${pct}%`,
@@ -880,7 +897,7 @@ async function openStudentProgressModal(studentId, label) {
   overlay.classList.remove("hidden");
   overlay.classList.add("flex");
   body.innerHTML =
-    "<p class='text-[11px] text-gray-500'>Loading student progress…</p>";
+    "<p class='text-sm text-gray-500'>Loading student progress…</p>";
 
   try {
     let subs = [];
@@ -943,7 +960,7 @@ async function openStudentProgressModal(studentId, label) {
     );
     if (!unitSummary.length) {
       unitCard.appendChild(
-        createEl("p", "text-[11px] text-gray-500", [
+        createEl("p", "text-sm text-gray-500", [
           "This student has not completed enough questions for unit-level stats yet.",
         ])
       );
@@ -977,7 +994,7 @@ async function openStudentProgressModal(studentId, label) {
     );
     if (!recent.length) {
       recentCard.appendChild(
-        createEl("p", "text-[11px] text-gray-500", [
+        createEl("p", "text-sm text-gray-500", [
           "This student has no recorded submissions yet.",
         ])
       );
@@ -1001,18 +1018,18 @@ async function openStudentProgressModal(studentId, label) {
           []
         );
         const left = createEl("div", "", [
-          createEl("p", "text-[11px] font-medium text-gray-900", [
+          createEl("p", "text-sm font-medium text-gray-900", [
             labelLine,
           ]),
-          createEl("p", "text-[10px] text-gray-500", [when || ""]),
+          createEl("p", "text-xs text-gray-500", [when || ""]),
         ]);
         const right = createEl("div", "text-right", [
           createEl(
             "p",
-            "text-[11px] font-semibold text-gray-900",
+            "text-sm font-semibold text-gray-900",
             [score]
           ),
-          createEl("p", "text-[10px] text-gray-500", [
+          createEl("p", "text-xs text-gray-500", [
             `${s.correctCount || 0}/${s.totalQuestions || 0} correct`,
           ]),
         ]);
@@ -1029,7 +1046,7 @@ async function openStudentProgressModal(studentId, label) {
     console.error("Student progress modal error", e);
     body.innerHTML = "";
     body.appendChild(
-      createEl("p", "text-[11px] text-red-600", [
+      createEl("p", "text-sm text-red-600", [
         "Unable to load student progress for this class.",
       ])
     );
@@ -1071,7 +1088,7 @@ async function openQuestionLibrary() {
   overlay.classList.remove("hidden");
   overlay.classList.add("flex");
   body.innerHTML =
-    "<p class='text-[11px] text-gray-500'>Loading questions…</p>";
+    "<p class='text-sm text-gray-500'>Loading questions…</p>";
 
   try {
     const qs = await DataManager.getQuestions({});
@@ -1080,7 +1097,7 @@ async function openQuestionLibrary() {
     if (!qs || !qs.length) {
       body.innerHTML = "";
       body.appendChild(
-        createEl("p", "text-[11px] text-gray-500", [
+        createEl("p", "text-sm text-gray-500", [
           "No questions found yet. Use the batch uploader or add questions to see them here.",
         ])
       );
@@ -1102,7 +1119,7 @@ async function openQuestionLibrary() {
     const wrapper = createEl("div", "space-y-2", []);
 
     wrapper.appendChild(
-      createEl("p", "text-[11px] text-gray-600", [
+      createEl("p", "text-sm text-gray-600", [
         `Showing ${qs.length} question${qs.length === 1 ? "" : "s"}. Click Edit or Delete to manage your bank.`,
       ])
     );
@@ -1131,10 +1148,10 @@ async function openQuestionLibrary() {
           : q.question || "(no text)";
 
       const left = createEl("div", "", [
-        createEl("p", "text-[11px] font-medium text-gray-900", [
+        createEl("p", "text-sm font-medium text-gray-900", [
           titleText,
         ]),
-        createEl("p", "text-[10px] text-gray-500", [
+        createEl("p", "text-xs text-gray-500", [
           unitLabel + skillLabel + diffLabel,
         ]),
       ]);
@@ -1147,17 +1164,17 @@ async function openQuestionLibrary() {
 
       const editBtn = createEl(
         "button",
-        "px-2 py-1 text-[10px] border border-gray-300 rounded-lg hover:bg-gray-50",
+        "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
         ["Edit text"]
       );
       const explainBtn = createEl(
         "button",
-        "px-2 py-1 text-[10px] border border-gray-300 rounded-lg hover:bg-gray-50",
+        "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
         ["Edit explanation"]
       );
       const deleteBtn = createEl(
         "button",
-        "px-2 py-1 text-[10px] border border-red-300 text-red-700 rounded-lg hover:bg-red-50",
+        "px-2 py-1 text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50",
         ["Delete"]
       );
 
@@ -1182,7 +1199,7 @@ async function openQuestionLibrary() {
               ? updated.slice(0, 157) + "…"
               : updated;
           left.querySelector(
-            ".text-[11px].font-medium.text-gray-900"
+            ".text-sm.font-medium.text-gray-900"
           ).textContent = newTitle;
           Toast.show("Question updated.", "success");
         } catch (err) {
@@ -1237,7 +1254,7 @@ async function openQuestionLibrary() {
     console.error("Question library error", err);
     body.innerHTML = "";
     body.appendChild(
-      createEl("p", "text-[11px] text-red-600", [
+      createEl("p", "text-sm text-red-600", [
         "Unable to load question library. Please try again later.",
       ])
     );
@@ -1411,14 +1428,14 @@ async function openQuestionLibrary() {
           "bg-blue-50 border border-blue-100 rounded-xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
         );
         const left = createEl("div", "", [
-          createEl("p", "text-[11px] font-semibold text-blue-700", [
+          createEl("p", "text-sm font-semibold text-blue-700", [
             "Next best step",
           ]),
           createEl("p", "text-xs text-gray-700 mt-0.5", [action.message]),
         ]);
         const btn = createEl(
           "button",
-          "self-start md:self-auto inline-flex items-center justify-center px-3 py-1.5 rounded-full bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/80",
+          "self-start md:self-auto inline-flex items-center justify-center px-3 py-1.5 rounded-full bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/80",
           [action.cta || "Start recommended practice"]
         );
         btn.addEventListener("click", () => {
@@ -1611,9 +1628,10 @@ async function openQuestionLibrary() {
         const answered = quiz.answers[quiz.index];
         const wrapper = createEl("div", "space-y-3", []);
         const header = createEl(
-          "div",
-          "flex justify-between items-center text-[11px] text-gray-600",
-          [
+  "div",
+  "flex justify-between items-center text-sm text-gray-600",
+  [
+
             createEl("span", "", [
               `Question ${quiz.index + 1} of ${quiz.questions.length}`,
             ]),
@@ -1651,19 +1669,21 @@ async function openQuestionLibrary() {
           []
         );
         qCard.appendChild(
-          createEl("p", "text-xs font-semibold text-gray-900", [q.question])
-        );
+  createEl("p", "text-base md:text-lg font-semibold text-gray-900 leading-relaxed", [q.question])
+);
+
         const list = createEl("div", "space-y-1", []);
         q.options.forEach((opt, idx) => {
           const isSelected = answered === idx;
           const btn = createEl(
-            "button",
-            "w-full text-left px-3 py-2 rounded-lg border text-xs transition-colors " +
-              (isSelected
-                ? "border-blue-600 bg-blue-50 text-blue-800"
-                : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"),
-            [opt]
-          );
+  "button",
+  "w-full text-left px-3 py-2 rounded-lg border text-sm md:text-base leading-relaxed transition-colors " +
+    (isSelected
+      ? "border-blue-600 bg-blue-50 text-blue-800"
+      : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"),
+  [opt]
+);
+
           btn.addEventListener("click", () => {
             quiz.answers[quiz.index] = idx;
             renderQuiz();
@@ -1865,20 +1885,20 @@ async function openQuestionLibrary() {
               ? "text-green-700"
               : "text-red-700";
           qWrap.appendChild(
-            createEl("p", "text-[11px] " + yourAnsClass, [
+            createEl("p", "text-sm " + yourAnsClass, [
               "Your answer: ",
               yourAnsText,
             ])
           );
           qWrap.appendChild(
-            createEl("p", "text-[11px] text-gray-800", [
+            createEl("p", "text-sm text-gray-800", [
               "Correct answer: ",
               qr.options[qr.correctIndex],
             ])
           );
           if (qr.explanation) {
             qWrap.appendChild(
-              createEl("p", "text-[11px] text-gray-700 mt-1", [
+              createEl("p", "text-sm text-gray-700 mt-1", [
                 "Explanation: ",
                 qr.explanation,
               ])
@@ -1888,7 +1908,7 @@ async function openQuestionLibrary() {
 if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
   const explList = createEl(
     "ul",
-    "mt-1 space-y-1 text-[11px] text-gray-700",
+    "mt-1 space-y-1 text-sm text-gray-700",
     []
   );
 
@@ -1925,7 +1945,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       async function renderStudentDashboard() {
         const content = $("tab-content");
         content.innerHTML =
-          "<p class='text-[11px] text-gray-500'>Loading your dashboard…</p>";
+          "<p class='text-sm text-gray-500'>Loading your dashboard…</p>";
 
         const userId = AppState.user.uid;
         let submissions = [];
@@ -1964,7 +1984,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               createEl("h1", "text-sm font-semibold text-gray-900", [
                 "Welcome back",
               ]),
-              createEl("p", "text-[11px] text-gray-600", [
+              createEl("p", "text-sm text-gray-600", [
                 "Your AP Psychology progress snapshot.",
               ]),
             ]),
@@ -2004,7 +2024,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         );
         if (!unitSummary.length) {
           unitCard.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "You’ll see per-unit performance once you’ve completed more practice.",
             ])
           );
@@ -2041,13 +2061,13 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         );
         const codeInput = createEl(
           "input",
-          "px-2 py-1.5 border border-gray-300 rounded-lg text-[11px] flex-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "px-2 py-1.5 border border-gray-300 rounded-lg text-sm flex-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
           []
         );
         codeInput.placeholder = "Join class with code";
         const joinBtn = createEl(
           "button",
-          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
           ["Join"]
         );
         joinBtn.addEventListener("click", async () => {
@@ -2083,7 +2103,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         if (!classes.length) {
           wrapper.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "You’re not in any classes yet. Ask your teacher for a class code.",
             ])
           );
@@ -2099,7 +2119,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               createEl("p", "text-xs font-semibold text-gray-900", [
                 c.name || "Class",
               ]),
-              createEl("p", "text-[11px] text-gray-500", [
+              createEl("p", "text-sm text-gray-500", [
                 "Code: " + (c.code || "—"),
               ]),
             ]);
@@ -2121,7 +2141,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           ])
         );
         wrapper.appendChild(
-          createEl("p", "text-[11px] text-gray-600", [
+          createEl("p", "text-sm text-gray-600", [
             `Score: ${Math.round(sub.scorePercent || 0)}% · ${
               sub.correctCount || 0
             }/${sub.totalQuestions || 0}`,
@@ -2155,20 +2175,20 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               ? "text-green-700"
               : "text-red-700";
           qWrap.appendChild(
-            createEl("p", "text-[11px] " + yourAnsClass, [
+            createEl("p", "text-sm " + yourAnsClass, [
               "Your answer: ",
               yourAnsText,
             ])
           );
           qWrap.appendChild(
-            createEl("p", "text-[11px] text-gray-800", [
+            createEl("p", "text-sm text-gray-800", [
               "Correct answer: ",
               qr.options[qr.correctIndex],
             ])
           );
           if (qr.explanation) {
             qWrap.appendChild(
-              createEl("p", "text-[11px] text-gray-700 mt-1", [
+              createEl("p", "text-sm text-gray-700 mt-1", [
                 "Explanation: ",
                 qr.explanation,
               ])
@@ -2178,7 +2198,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
   const explList = createEl(
     "ul",
-    "mt-1 space-y-1 text-[11px] text-gray-700",
+    "mt-1 space-y-1 text-sm text-gray-700",
     []
   );
 
@@ -2211,7 +2231,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       async function renderStudentAssignments() {
         const content = $("tab-content");
         content.innerHTML =
-          "<p class='text-[11px] text-gray-500'>Loading assignments…</p>";
+          "<p class='text-sm text-gray-500'>Loading assignments…</p>";
         const userId = AppState.user.uid;
 
         let assignments = [];
@@ -2240,7 +2260,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         if (!assignments.length) {
           wrapper.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "No teacher-assigned work yet. You can still use the Practice tab anytime.",
             ])
           );
@@ -2271,22 +2291,22 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               createEl("p", "text-xs font-semibold text-gray-900", [
                 a.title || "Assignment",
               ]),
-              createEl("p", "text-[11px] text-gray-500", [
+              createEl("p", "text-sm text-gray-500", [
                 `${a.questionCount || 10} Q • ${
                   a.timeLimitMinutes ? a.timeLimitMinutes + " min" : "No limit"
                 }`,
               ]),
-              createEl("p", "text-[11px] text-gray-500", [
+              createEl("p", "text-sm text-gray-500", [
                 "Due: " + dueLabel,
               ]),
-              createEl("p", "text-[11px] text-gray-500", [
+              createEl("p", "text-sm text-gray-500", [
                 "Last score: " + scoreLabel,
               ]),
             ]);
 
             const statusPill = createEl(
               "span",
-              "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " +
+              "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium " +
                 (status === "Active"
                   ? "bg-green-50 text-green-700 border border-green-200"
                   : "bg-red-50 text-red-700 border border-red-200"),
@@ -2297,7 +2317,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             const right = createEl("div", "flex gap-2 items-center", []);
             const startBtn = createEl(
               "button",
-              "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+              "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
               [lastSub ? "Start / Retake" : "Start"]
             );
             startBtn.addEventListener("click", async () => {
@@ -2362,7 +2382,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             if (lastSub) {
               const reviewBtn = createEl(
                 "button",
-                "px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+                "px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
                 ["Review"]
               );
               reviewBtn.addEventListener("click", () => {
@@ -2385,7 +2405,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       async function renderStudentAnalytics() {
         const content = $("tab-content");
         content.innerHTML =
-          "<p class='text-[11px] text-gray-500'>Loading analytics…</p>";
+          "<p class='text-sm text-gray-500'>Loading analytics…</p>";
         const userId = AppState.user.uid;
 
         let submissions = [];
@@ -2423,7 +2443,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               createEl("h1", "text-sm font-semibold text-gray-900", [
                 "Analytics & Insights",
               ]),
-              createEl("p", "text-[11px] text-gray-600", [
+              createEl("p", "text-sm text-gray-600", [
                 "See how you’re doing by unit and overall.",
               ]),
             ]),
@@ -2457,7 +2477,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         );
         if (!unitSummary.length) {
           unitCard.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "Once you’ve done more practice, you’ll see which units are strongest and weakest.",
             ])
           );
@@ -2486,7 +2506,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           ])
         );
         srCard.appendChild(
-          createEl("p", "text-[11px] text-gray-600", [
+          createEl("p", "text-sm text-gray-600", [
             `Total cards: ${srStats.totalCards || 0} · Due now: ${
               srStats.dueNow || 0
             } · Due soon: ${srStats.dueSoon || 0} · Mastered: ${
@@ -2505,7 +2525,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         const wrapper = createEl("div", "space-y-4", []);
         if (!AppState.user) {
           wrapper.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "Please sign in to start practice.",
             ])
           );
@@ -2518,7 +2538,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               createEl("h2", "text-sm font-semibold text-gray-900", [
                 "Practice modes",
               ]),
-              createEl("p", "text-[11px] text-gray-600", [
+              createEl("p", "text-sm text-gray-600", [
                 "Mix targeted unit work, smart practice, spaced repetition, and timed drills.",
               ]),
             ]),
@@ -2544,14 +2564,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             ])
           );
           card.appendChild(
-            createEl("p", "text-[11px] text-gray-600", [
+            createEl("p", "text-sm text-gray-600", [
               "Pick a single AP Psychology unit and run a focused practice set.",
             ])
           );
 
           const row1 = createEl(
             "div",
-            "flex items-center gap-2 text-[11px]",
+            "flex items-center gap-2 text-sm",
             []
           );
           const unitSelect = createEl(
@@ -2580,7 +2600,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
           const btn = createEl(
             "button",
-            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
             ["Start unit practice"]
           );
           btn.addEventListener("click", () => {
@@ -2605,14 +2625,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             ])
           );
           card.appendChild(
-            createEl("p", "text-[11px] text-gray-600", [
+            createEl("p", "text-sm text-gray-600", [
               "Blends spaced repetition cards with your weakest units.",
             ])
           );
 
           const countInput = createEl(
             "input",
-            "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-[11px]",
+            "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm",
             []
           );
           countInput.type = "number";
@@ -2622,18 +2642,18 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
           const row = createEl(
             "div",
-            "flex items-center gap-2 text-[11px]",
+            "flex items-center gap-2 text-sm",
             []
           );
           row.appendChild(
-            createEl("span", "text-[11px] text-gray-600", ["Questions:"])
+            createEl("span", "text-sm text-gray-600", ["Questions:"])
           );
           row.appendChild(countInput);
           card.appendChild(row);
 
           const btn = createEl(
             "button",
-            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
             ["Start smart set"]
           );
           btn.addEventListener("click", () => {
@@ -2659,14 +2679,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           );
           const subtitle = createEl(
             "p",
-            "text-[11px] text-gray-600",
+            "text-sm text-gray-600",
             ["SR keeps concepts fresh with short daily reviews."]
           );
           card.appendChild(subtitle);
 
           const statsLine = createEl(
             "p",
-            "text-[11px] text-gray-600",
+            "text-sm text-gray-600",
             ["Loading SR stats..."]
           );
           card.appendChild(statsLine);
@@ -2687,7 +2707,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
           const btn = createEl(
             "button",
-            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
             ["Start SR review"]
           );
           btn.addEventListener("click", () => {
@@ -2711,14 +2731,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             ])
           );
           card.appendChild(
-            createEl("p", "text-[11px] text-gray-600", [
+            createEl("p", "text-sm text-gray-600", [
               "Simulate exam pressure with timed mixed sets.",
             ])
           );
 
           const unitRow = createEl(
             "div",
-            "flex items-center gap-2 text-[11px]",
+            "flex items-center gap-2 text-sm",
             []
           );
           const unitSelect = createEl(
@@ -2742,14 +2762,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             unitSelect.appendChild(opt);
           });
           unitRow.appendChild(
-            createEl("span", "text-[11px] text-gray-600", ["Mode:"])
+            createEl("span", "text-sm text-gray-600", ["Mode:"])
           );
           unitRow.appendChild(unitSelect);
           card.appendChild(unitRow);
 
           const countRow = createEl(
             "div",
-            "flex items-center gap-2 text-[11px] mt-1",
+            "flex items-center gap-2 text-sm mt-1",
             []
           );
           const countInput = createEl(
@@ -2762,14 +2782,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           countInput.max = "50";
           countInput.value = "20";
           countRow.appendChild(
-            createEl("span", "text-[11px] text-gray-600", ["Questions:"])
+            createEl("span", "text-sm text-gray-600", ["Questions:"])
           );
           countRow.appendChild(countInput);
           card.appendChild(countRow);
 
           const timeRow = createEl(
             "div",
-            "flex items-center gap-2 text-[11px] mt-1",
+            "flex items-center gap-2 text-sm mt-1",
             []
           );
           const timeSelect = createEl(
@@ -2784,14 +2804,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             timeSelect.appendChild(opt);
           });
           timeRow.appendChild(
-            createEl("span", "text-[11px] text-gray-600", ["Time:"])
+            createEl("span", "text-sm text-gray-600", ["Time:"])
           );
           timeRow.appendChild(timeSelect);
           card.appendChild(timeRow);
 
           const btn = createEl(
             "button",
-            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
             ["Start timed set"]
           );
           btn.addEventListener("click", () => {
@@ -2813,7 +2833,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       async function renderTeacherDashboard() {
         const content = $("tab-content");
         content.innerHTML =
-          "<p class='text-[11px] text-gray-500'>Loading teacher dashboard…</p>";
+          "<p class='text-sm text-gray-500'>Loading teacher dashboard…</p>";
         const teacherId = AppState.user.uid;
 
         let classes = [];
@@ -2878,7 +2898,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               createEl("h1", "text-sm font-semibold text-gray-900", [
                 "Class overview",
               ]),
-              createEl("p", "text-[11px] text-gray-600", [
+              createEl("p", "text-sm text-gray-600", [
                 "High-level snapshot of your AP Psychology classes.",
               ]),
             ]),
@@ -2921,7 +2941,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         if (!sortedSubs.length) {
           activityCard.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "Once students complete assignments, you’ll see their latest work here.",
             ])
           );
@@ -2930,21 +2950,21 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             const a = assignments.find((x) => x.id === s.assignmentId);
             const row = createEl(
               "div",
-              "flex items-center justify-between text-[11px] py-1",
+              "flex items-center justify-between text-sm py-1",
               []
             );
             row.appendChild(
               createEl("div", "", [
-                createEl("p", "text-[11px] text-gray-800", [
+                createEl("p", "text-sm text-gray-800", [
                   a?.title || "Practice session",
                 ]),
-                createEl("p", "text-[10px] text-gray-500", [
+                createEl("p", "text-xs text-gray-500", [
                   formatDateTimeISO(s.completedAt),
                 ]),
               ])
             );
             row.appendChild(
-              createEl("p", "text-[11px] font-medium text-gray-900", [
+              createEl("p", "text-sm font-medium text-gray-900", [
                 Math.round(s.scorePercent || 0) + "%",
               ])
             );
@@ -2961,7 +2981,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       async function renderTeacherClasses() {
         const content = $("tab-content");
         content.innerHTML =
-          "<p class='text-[11px] text-gray-500'>Loading classes…</p>";
+          "<p class='text-sm text-gray-500'>Loading classes…</p>";
         const teacherId = AppState.user.uid;
 
         let classes = [];
@@ -2986,7 +3006,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           []
         );
         createCard.appendChild(
-          createEl("p", "text-[11px] text-gray-700 font-medium", [
+          createEl("p", "text-sm text-gray-700 font-medium", [
             "Create a new class",
           ])
         );
@@ -2997,13 +3017,13 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         );
         const nameInput = createEl(
           "input",
-          "flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-[11px] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
           []
         );
         nameInput.placeholder = "Class name (e.g., 3rd period AP Psych)";
         const createBtn = createEl(
           "button",
-          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
           ["Create class"]
         );
         createBtn.addEventListener("click", async () => {
@@ -3043,7 +3063,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         if (!classes.length) {
           listCard.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "You haven’t created any classes yet. Use the form above to get started.",
             ])
           );
@@ -3051,14 +3071,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           classes.forEach((c) => {
             const row = createEl(
               "div",
-              "flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-[11px]",
+              "flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-sm",
               []
             );
             const left = createEl("div", "", [
               createEl("p", "text-xs font-semibold text-gray-900", [
                 c.name || "Class",
               ]),
-              createEl("p", "text-[11px] text-gray-500", [
+              createEl("p", "text-sm text-gray-500", [
                 `Code: ${c.code || "—"} · Students: ${
                   (c.studentIds || []).length
                 }`,
@@ -3067,7 +3087,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             const right = createEl("div", "flex items-center gap-1", []);
             const copyBtn = createEl(
               "button",
-              "px-2 py-1 rounded-lg border border-gray-300 text-[10px] hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+              "px-2 py-1 rounded-lg border border-gray-300 text-xs hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
               ["Copy code"]
             );
             copyBtn.addEventListener("click", () => {
@@ -3183,7 +3203,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       async function renderTeacherAssignments() {
         const content = $("tab-content");
         content.innerHTML =
-          "<p class='text-[11px] text-gray-500'>Loading assignments…</p>";
+          "<p class='text-sm text-gray-500'>Loading assignments…</p>";
         const teacherId = AppState.user.uid;
 
         let classes = [];
@@ -3216,19 +3236,19 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           []
         );
         createCard.appendChild(
-          createEl("p", "text-[11px] font-semibold text-gray-800", [
+          createEl("p", "text-sm font-semibold text-gray-800", [
             "Create assignment",
           ])
         );
         createCard.appendChild(
-          createEl("p", "text-[11px] text-gray-600", [
+          createEl("p", "text-sm text-gray-600", [
             "Four assignment types, due dates, time limits, and optional custom question sets.",
           ])
         );
 
         if (!classes.length) {
           createCard.appendChild(
-            createEl("p", "text-[11px] text-red-600", [
+            createEl("p", "text-sm text-red-600", [
               "You need at least one class before you can assign work.",
             ])
           );
@@ -3236,7 +3256,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         const formGrid = createEl(
           "div",
-          "grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]",
+          "grid grid-cols-1 md:grid-cols-2 gap-3 text-sm",
           []
         );
 
@@ -3256,7 +3276,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         formGrid.appendChild(
           createEl("div", "space-y-1", [
-            createEl("label", "text-[11px] text-gray-700", ["Class"]),
+            createEl("label", "text-sm text-gray-700", ["Class"]),
             classSelect,
           ])
         );
@@ -3270,7 +3290,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         titleInput.placeholder = "Assignment title";
         formGrid.appendChild(
           createEl("div", "space-y-1", [
-            createEl("label", "text-[11px] text-gray-700", ["Title"]),
+            createEl("label", "text-sm text-gray-700", ["Title"]),
             titleInput,
           ])
         );
@@ -3290,7 +3310,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         `;
         formGrid.appendChild(
           createEl("div", "space-y-1", [
-            createEl("label", "text-[11px] text-gray-700", ["Type"]),
+            createEl("label", "text-sm text-gray-700", ["Type"]),
             typeSelect,
           ])
         );
@@ -3307,7 +3327,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         countInput.value = "10";
         formGrid.appendChild(
           createEl("div", "space-y-1", [
-            createEl("label", "text-[11px] text-gray-700", [
+            createEl("label", "text-sm text-gray-700", [
               "Question count",
             ]),
             countInput,
@@ -3329,7 +3349,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         `;
         formGrid.appendChild(
           createEl("div", "space-y-1", [
-            createEl("label", "text-[11px] text-gray-700", ["Time limit"]),
+            createEl("label", "text-sm text-gray-700", ["Time limit"]),
             timeSelect,
           ])
         );
@@ -3343,7 +3363,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         dueInput.type = "datetime-local";
         formGrid.appendChild(
           createEl("div", "space-y-1", [
-            createEl("label", "text-[11px] text-gray-700", ["Due date"]),
+            createEl("label", "text-sm text-gray-700", ["Due date"]),
             dueInput,
           ])
         );
@@ -3351,11 +3371,11 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         // Units selection
         const unitsWrapper = createEl("div", "space-y-1 md:col-span-2", []);
         unitsWrapper.appendChild(
-          createEl("label", "text-[11px] text-gray-700", ["Units"])
+          createEl("label", "text-sm text-gray-700", ["Units"])
         );
         const unitOptionsEl = createEl(
           "div",
-          "flex flex-wrap gap-2 text-[11px]",
+          "flex flex-wrap gap-2 text-sm",
           []
         );
         unitsWrapper.appendChild(unitOptionsEl);
@@ -3383,7 +3403,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               input.className = "h-3 w-3 text-blue-600";
               label.appendChild(input);
               label.appendChild(
-                createEl("span", "text-[11px] text-gray-700", [u.label])
+                createEl("span", "text-sm text-gray-700", [u.label])
               );
               unitOptionsEl.appendChild(label);
             });
@@ -3400,19 +3420,19 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
               input.className = "h-3 w-3 text-blue-600";
               label.appendChild(input);
               label.appendChild(
-                createEl("span", "text-[11px] text-gray-700", [u.label])
+                createEl("span", "text-sm text-gray-700", [u.label])
               );
               unitOptionsEl.appendChild(label);
             });
           } else if (type === "all") {
             unitOptionsEl.appendChild(
-              createEl("p", "text-[11px] text-gray-500", [
+              createEl("p", "text-sm text-gray-500", [
                 "All units (1–9) will be included.",
               ])
             );
           } else if (type === "custom") {
             unitOptionsEl.appendChild(
-              createEl("p", "text-[11px] text-gray-500", [
+              createEl("p", "text-sm text-gray-500", [
                 "Units will be inferred from your custom question set.",
               ])
             );
@@ -3427,7 +3447,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         // Settings toggles
         const settingsRow = createEl(
           "div",
-          "flex flex-wrap gap-3 mt-1 text-[11px]",
+          "flex flex-wrap gap-3 mt-1 text-sm",
           []
         );
         const multipleAttemptsInput = document.createElement("input");
@@ -3447,7 +3467,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           input.className = "h-3 w-3 text-blue-600";
           wrap.appendChild(input);
           wrap.appendChild(
-            createEl("span", "text-[11px] text-gray-700", [label])
+            createEl("span", "text-sm text-gray-700", [label])
           );
           return wrap;
         };
@@ -3467,7 +3487,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         let currentCustomQuestionIds = [];
         let customLabel = createEl(
           "span",
-          "text-[11px] text-gray-500",
+          "text-sm text-gray-500",
           ["No questions selected yet."]
         );
 
@@ -3477,14 +3497,14 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           []
         );
         pickerRow.appendChild(
-          createEl("div", "text-[11px] text-gray-600", [
+          createEl("div", "text-sm text-gray-600", [
             "Custom question set (for type “Custom”)",
           ])
         );
         const pickerControls = createEl("div", "flex items-center gap-2", []);
         const pickerBtn = createEl(
           "button",
-          "px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "px-3 py-1.5 rounded-lg border border-gray-300 text-sm hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
           ["Pick questions"]
         );
         pickerControls.appendChild(pickerBtn);
@@ -3526,7 +3546,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           );
           const closeBtn = createEl(
             "button",
-            "text-[11px] text-gray-500 hover:text-gray-900 focus:outline-none",
+            "text-sm text-gray-500 hover:text-gray-900 focus:outline-none",
             ["Close"]
           );
           closeBtn.addEventListener("click", () => {
@@ -3537,11 +3557,11 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
           const body = createEl(
             "div",
-            "flex-1 overflow-auto px-4 py-3 space-y-2 text-[11px]",
+            "flex-1 overflow-auto px-4 py-3 space-y-2 text-sm",
             []
           );
           body.appendChild(
-            createEl("p", "text-[11px] text-gray-500 mb-1", [
+            createEl("p", "text-sm text-gray-500 mb-1", [
               "Select any questions you want in this custom assignment.",
             ])
           );
@@ -3551,17 +3571,17 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
           const footer = createEl(
             "div",
-            "px-4 py-3 border-t border-gray-200 flex items-center justify-between text-[11px]",
+            "px-4 py-3 border-t border-gray-200 flex items-center justify-between text-sm",
             []
           );
           const summary = createEl(
             "span",
-            "text-[11px] text-gray-600",
+            "text-sm text-gray-600",
             ["Loading questions..."]
           );
           const doneBtn = createEl(
             "button",
-            "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
             ["Done"]
           );
           doneBtn.addEventListener("click", () => {
@@ -3570,7 +3590,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           });
           const clearBtn = createEl(
             "button",
-            "px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            "px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
             ["Clear"]
           );
           clearBtn.addEventListener("click", () => {
@@ -3633,8 +3653,8 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
                 });
                 row.appendChild(cb);
                 const text = createEl("div", "flex-1", [
-                  createEl("p", "text-[11px] text-gray-800", [q.question]),
-                  createEl("p", "text-[10px] text-gray-500 mt-0.5", [
+                  createEl("p", "text-sm text-gray-800", [q.question]),
+                  createEl("p", "text-xs text-gray-500 mt-0.5", [
                     `Unit ${q.unit || "?"}${
                       q.skill ? " · " + q.skill : ""
                     }`,
@@ -3658,7 +3678,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         // Create assignment button
         const createBtn = createEl(
           "button",
-          "mt-3 inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "mt-3 inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
           ["Create assignment"]
         );
         createBtn.addEventListener("click", async () => {
@@ -3759,7 +3779,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         if (!assignments.length) {
           recentCard.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "Once you create assignments, you’ll see quick stats here.",
             ])
           );
@@ -3810,21 +3830,21 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
             const card = createEl(
               "div",
-              "flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-[11px]",
+              "flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-sm",
               []
             );
             const left = createEl("div", "", [
               createEl("p", "text-xs font-semibold text-gray-900", [
                 a.title || "Assignment",
               ]),
-              createEl("p", "text-[11px] text-gray-500", [
+              createEl("p", "text-sm text-gray-500", [
                 `${clazz?.name || "Class"} · ${
                   a.questionCount || 10
                 } Q · ${
                   a.timeLimitMinutes ? a.timeLimitMinutes + " min" : "No limit"
                 }`,
               ]),
-              createEl("p", "text-[10px] text-gray-500", [
+              createEl("p", "text-xs text-gray-500", [
                 a.dueAt
                   ? `Due ${formatDateTimeISO(a.dueAt)} (${status})`
                   : "No due date",
@@ -3832,12 +3852,12 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             ]);
             const right = createEl("div", "text-right space-y-0.5", []);
             right.appendChild(
-              createEl("p", "text-[11px] text-gray-700", [
+              createEl("p", "text-sm text-gray-700", [
                 `${completed}/${totalStudents || "?"} completed`,
               ])
             );
             right.appendChild(
-              createEl("p", "text-[11px] font-semibold text-gray-900", [
+              createEl("p", "text-sm font-semibold text-gray-900", [
                 avg == null ? "—" : avg + "% avg",
               ])
             );
@@ -3861,20 +3881,20 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           ])
         );
         batchCard.appendChild(
-          createEl("p", "text-[11px] text-gray-600", [
+          createEl("p", "text-sm text-gray-600", [
             "Paste questions using the format:",
             " Unit | Skill | Difficulty | Question | A | B | C | D | Correct | Explanation",
           ])
         );
         batchCard.appendChild(
-          createEl("p", "text-[11px] text-gray-500", [
+          createEl("p", "text-sm text-gray-500", [
             "Example:",
             " 1 | Concept Application | Standard | In classical conditioning, the unlearned response is called the: | UR | CR | CS | UCS | A | The unconditioned response (UR) is the automatic, unlearned response.",
           ])
         );
         const textarea = createEl(
           "textarea",
-          "w-full min-h-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-[11px] font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "w-full min-h-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-sm font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
           []
         );
         textarea.placeholder =
@@ -3883,17 +3903,17 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         const batchFooter = createEl(
           "div",
-          "flex items-center justify-between mt-2 text-[11px]",
+          "flex items-center justify-between mt-2 text-sm",
           []
         );
         const batchStatus = createEl(
           "span",
-          "text-[11px] text-gray-500",
+          "text-sm text-gray-500",
           ["No upload yet."]
         );
         const batchBtn = createEl(
           "button",
-          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
           ["Upload questions"]
         );
         batchBtn.addEventListener("click", async () => {
@@ -3940,7 +3960,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       async function renderTeacherResults() {
         const content = $("tab-content");
         content.innerHTML =
-          "<p class='text-[11px] text-gray-500'>Loading class analytics…</p>";
+          "<p class='text-sm text-gray-500'>Loading class analytics…</p>";
         const teacherId = AppState.user.uid;
 
         let classes = [];
@@ -3982,7 +4002,7 @@ TeacherResultsState.submissions = submissions || [];
               createEl("h1", "text-sm font-semibold text-gray-900", [
                 "Class analytics",
               ]),
-              createEl("p", "text-[11px] text-gray-600", [
+              createEl("p", "text-sm text-gray-600", [
                 "Class-wide summaries, unit difficulty, and question-level insights.",
               ]),
             ]),
@@ -3991,7 +4011,7 @@ TeacherResultsState.submissions = submissions || [];
 
         if (!assignments.length || !submissions.length) {
           wrapper.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "Once students complete assignments, you’ll see analytics here.",
             ])
           );
@@ -4065,13 +4085,13 @@ headerRow.appendChild(
 );
 const openLibBtn = createEl(
   "button",
-  "px-2 py-1 text-[11px] border border-gray-300 rounded-lg hover:bg-gray-50",
+  "px-2 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50",
   ["Open"]
 );
 headerRow.appendChild(openLibBtn);
 questionLibCard.appendChild(headerRow);
 questionLibCard.appendChild(
-  createEl("p", "text-[11px] text-gray-600", [
+  createEl("p", "text-sm text-gray-600", [
     "Browse, edit, or delete questions in your bank.",
   ])
 );
@@ -4087,7 +4107,7 @@ studentCard.appendChild(
     createEl("h3", "text-xs font-semibold text-gray-800", [
       "Students",
     ]),
-    createEl("p", "text-[11px] text-gray-500", [
+    createEl("p", "text-sm text-gray-500", [
       "Click a student to see their progress.",
     ]),
   ])
@@ -4095,7 +4115,7 @@ studentCard.appendChild(
 
 if (!studentSet.size) {
   studentCard.appendChild(
-    createEl("p", "text-[11px] text-gray-500", [
+    createEl("p", "text-sm text-gray-500", [
       "Once students join your classes and complete assignments, they’ll appear here.",
     ])
   );
@@ -4137,10 +4157,10 @@ if (!studentSet.size) {
     );
 
     const left = createEl("div", "flex flex-col", [
-      createEl("span", "text-[11px] font-medium text-gray-900", [
+      createEl("span", "text-sm font-medium text-gray-900", [
         label,
       ]),
-      createEl("span", "text-[11px] text-gray-500", [
+      createEl("span", "text-sm text-gray-500", [
         assignmentsCount
           ? `${assignmentsCount} submission${
               assignmentsCount === 1 ? "" : "s"
@@ -4152,10 +4172,10 @@ if (!studentSet.size) {
     const right = createEl("div", "flex flex-col items-end", [
       createEl(
         "span",
-        "text-[11px] font-semibold text-gray-900",
+        "text-sm font-semibold text-gray-900",
         [pct == null ? "—" : pct + "%"]
       ),
-      createEl("span", "text-[11px] text-gray-500", [
+      createEl("span", "text-sm text-gray-500", [
         ap ? `AP ≈ ${ap}` : "",
       ]),
     ]);
@@ -4198,7 +4218,7 @@ wrapper.appendChild(studentCard);
         );
         if (!Object.keys(perUnitAgg).length) {
           unitCard.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "Once students answer more questions, you’ll see which units are hardest here.",
             ])
           );
@@ -4269,7 +4289,7 @@ wrapper.appendChild(studentCard);
         );
         if (!hardest.length) {
           hardestCard.appendChild(
-            createEl("p", "text-[11px] text-gray-500", [
+            createEl("p", "text-sm text-gray-500", [
               "Once students have seen questions multiple times, the lowest-performing questions will appear here.",
             ])
           );
@@ -4277,16 +4297,16 @@ wrapper.appendChild(studentCard);
           hardest.forEach((q) => {
             const row = createEl(
               "div",
-              "border border-gray-200 rounded-lg px-3 py-2 text-[11px] space-y-1",
+              "border border-gray-200 rounded-lg px-3 py-2 text-sm space-y-1",
               []
             );
             row.appendChild(
-              createEl("p", "text-[11px] text-gray-800", [
+              createEl("p", "text-sm text-gray-800", [
                 q.text.length > 160 ? q.text.slice(0, 157) + "…" : q.text,
               ])
             );
             row.appendChild(
-              createEl("p", "text-[10px] text-gray-500", [
+              createEl("p", "text-xs text-gray-500", [
                 `Unit ${q.unit || "?"} · ${q.correct}/${q.attempts} correct · ${Math.round(
                   (q.accuracy || 0) * 100
                 )}% accuracy`,
@@ -4328,7 +4348,7 @@ wrapper.appendChild(studentCard);
           const count = counts[i];
           const row = createEl(
             "div",
-            "flex items-center justify-between text-[11px]",
+            "flex items-center justify-between text-sm",
             []
           );
           const barWrapper = createEl(
@@ -4342,11 +4362,11 @@ wrapper.appendChild(studentCard);
           fill.style.width = pct + "%";
           barWrapper.appendChild(fill);
           row.appendChild(
-            createEl("span", "w-16 text-[11px] text-gray-600", [b.label])
+            createEl("span", "w-16 text-sm text-gray-600", [b.label])
           );
           row.appendChild(barWrapper);
           row.appendChild(
-            createEl("span", "w-10 text-right text-[11px] text-gray-600", [
+            createEl("span", "w-10 text-right text-sm text-gray-600", [
               String(count),
             ])
           );
@@ -4378,15 +4398,15 @@ wrapper.appendChild(studentCard);
           const isActive = AppState.currentTab === tab.id;
           const btn = createEl(
             "button",
-            "flex-1 px-3 py-1.5 rounded-lg text-[11px] border transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500",
+            "flex-1 px-3 py-1.5 rounded-lg text-sm border transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500",
             [tab.label]
           );
           if (isActive) {
             btn.className =
-              "flex-1 px-3 py-1.5 rounded-lg text-[11px] border tab-active focus:outline-none focus:ring-1 focus:ring-blue-500";
+              "flex-1 px-3 py-1.5 rounded-lg text-sm border tab-active focus:outline-none focus:ring-1 focus:ring-blue-500";
           } else {
             btn.className =
-              "flex-1 px-3 py-1.5 rounded-lg text-[11px] border border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500";
+              "flex-1 px-3 py-1.5 rounded-lg text-sm border border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500";
           }
           btn.addEventListener("click", () => {
             AppState.currentTab = tab.id;
