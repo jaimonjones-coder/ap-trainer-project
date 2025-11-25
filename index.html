@@ -486,11 +486,12 @@
           if (!studentIds.includes(studentId)) {
             studentIds.push(studentId);
             students.push({
-              id: studentId,
-              email,
-              joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-            await doc.ref.update({ studentIds, students });
+  id: studentId,
+  email,
+  joinedAt: new Date().toISOString(),
+});
+await doc.ref.update({ studentIds, students });
+
           }
           return { id: doc.id, ...data, students, studentIds };
         },
