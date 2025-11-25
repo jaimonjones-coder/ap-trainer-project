@@ -256,7 +256,41 @@
         </div>
       </div>
     </div>
-
+<!-- Individual Student Progress Modal -->
+<div
+  id="student-progress-overlay"
+  class="fixed inset-0 bg-black/40 z-40 hidden items-center justify-center"
+>
+  <div
+    id="student-progress-modal"
+    class="bg-white rounded-xl shadow-lg max-w-2xl w-full mx-3 max-h-[90vh] overflow-hidden flex flex-col"
+  >
+    <div
+      class="flex items-center justify-between px-4 py-2 border-b border-gray-200"
+    >
+      <h2 class="text-sm font-semibold text-gray-900">
+        Student progress:
+        <span
+          id="student-progress-title"
+          class="font-normal text-gray-700"
+        ></span>
+      </h2>
+      <button
+        id="student-progress-close"
+        class="text-gray-400 hover:text-gray-600 text-lg leading-none px-2"
+        type="button"
+      >
+        ×
+      </button>
+    </div>
+    <div
+      id="student-progress-body"
+      class="p-4 space-y-3 text-[11px] overflow-y-auto"
+    >
+      <!-- Filled by JS -->
+    </div>
+  </div>
+</div>
     <script>
       // ---------------- Firebase init ----------------
       const firebaseConfig = {
@@ -762,7 +796,201 @@ await doc.ref.update({ studentIds, students });
           }));
         },
       };
+let studentProgressModalInitialized = false;
+const TeacherResultsState = {
+  classes: [],
+  assignments: [],
+  submissions: [],
+};
 
+function ensureStudentProgressModalEvents() {
+  const overlay = $("student-progress-overlay");
+  const closeBtn = $("student-progress-close");
+  if (!overlay || !closeBtn || studentProgressModalInitialized) return;
+  studentProgressModalInitialized = true;
+
+  closeBtn.addEventListener("click", closeStudentProgressModal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      closeStudentProgressModal();
+    }
+  });
+}
+
+function closeStudentProgressModal() {
+  const overlay = $("student-progress-overlay");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
+  overlay.classList.remove("flex");
+}
+
+async function openStudentProgressModal(studentId, label) {
+  const overlay = $("student-progress-overlay");
+  const body = $("student-progress-body");
+  const titleEl = $("student-progress-title");
+  if (!overlay || !body || !titleEl) return;
+
+  ensureStudentProgressModalEvents();
+
+  titleEl.textContent = label || "Student";
+  overlay.classList.remove("hidden");
+  overlay.classList.add("flex");
+  body.innerHTML =
+    "<p class='text-[11px] text-gray-500'>Loading student progress…</p>";
+
+  try {
+    let subs = [];
+    if (
+      TeacherResultsState.submissions &&
+      TeacherResultsState.submissions.length
+    ) {
+      subs = TeacherResultsState.submissions.filter(
+        (s) => s.userId === studentId
+      );
+    } else {
+      // Fallback: load directly from Firestore if needed
+      subs = await DataManager.listSubmissionsForStudent(studentId);
+    }
+
+    const overview = AnalyticsService.computeStudentOverview(subs);
+    const unitSummary = AnalyticsService.summarizeUnits(overview.unitStats);
+
+    const recent = (subs || []).slice(0, 5); // last 5 submissions
+
+    const wrapper = createEl("div", "space-y-3", []);
+
+    const pct =
+      overview && typeof overview.avgScore === "number"
+        ? Math.round(overview.avgScore)
+        : null;
+    const ap =
+      overview && typeof overview.apPrediction === "number"
+        ? overview.apPrediction.toFixed(1)
+        : null;
+    const totalAssignments = subs && subs.length ? subs.length : 0;
+    const streak =
+      overview &&
+      overview.stats &&
+      typeof overview.stats.streak === "number"
+        ? overview.stats.streak
+        : 0;
+
+    const topRow = createEl(
+      "div",
+      "grid grid-cols-1 md:grid-cols-4 gap-3",
+      [
+        statCard("Average score", pct == null ? "—" : pct + "%"),
+        statCard("Assignments", totalAssignments || 0),
+        statCard("Current streak", streak || 0),
+        statCard("AP prediction", ap ? "≈ " + ap : "—"),
+      ]
+    );
+    wrapper.appendChild(topRow);
+
+    const unitCard = createEl(
+      "div",
+      "bg-white border border-gray-200 rounded-xl p-3 space-y-2",
+      []
+    );
+    unitCard.appendChild(
+      createEl("h3", "text-xs font-semibold text-gray-800", [
+        "Unit performance",
+      ])
+    );
+    if (!unitSummary.length) {
+      unitCard.appendChild(
+        createEl("p", "text-[11px] text-gray-500", [
+          "This student has not completed enough questions for unit-level stats yet.",
+        ])
+      );
+    } else {
+      unitSummary.forEach((u) => {
+        unitCard.appendChild(
+          unitBar(
+            u.unit,
+            u.accuracy,
+            u.total,
+            u.accuracy >= 0.7
+              ? "bg-green-600"
+              : u.accuracy >= 0.5
+              ? "bg-amber-500"
+              : "bg-red-600"
+          )
+        );
+      });
+    }
+    wrapper.appendChild(unitCard);
+
+    const recentCard = createEl(
+      "div",
+      "bg-white border border-gray-200 rounded-xl p-3 space-y-2",
+      []
+    );
+    recentCard.appendChild(
+      createEl("h3", "text-xs font-semibold text-gray-800", [
+        "Recent assignment results",
+      ])
+    );
+    if (!recent.length) {
+      recentCard.appendChild(
+        createEl("p", "text-[11px] text-gray-500", [
+          "This student has no recorded submissions yet.",
+        ])
+      );
+    } else {
+      recent.forEach((s) => {
+        const score =
+          typeof s.scorePercent === "number"
+            ? Math.round(s.scorePercent) + "%"
+            : "—";
+        const when = s.completedAt
+          ? new Date(s.completedAt).toLocaleString()
+          : "";
+        const labelLine =
+          typeof s.mode === "string" && s.mode === "assignment"
+            ? "Assignment"
+            : "Practice";
+
+        const row = createEl(
+          "div",
+          "flex items-center justify-between border border-gray-100 rounded-lg px-2 py-1.5",
+          []
+        );
+        const left = createEl("div", "", [
+          createEl("p", "text-[11px] font-medium text-gray-900", [
+            labelLine,
+          ]),
+          createEl("p", "text-[10px] text-gray-500", [when || ""]),
+        ]);
+        const right = createEl("div", "text-right", [
+          createEl(
+            "p",
+            "text-[11px] font-semibold text-gray-900",
+            [score]
+          ),
+          createEl("p", "text-[10px] text-gray-500", [
+            `${s.correctCount || 0}/${s.totalQuestions || 0} correct`,
+          ]),
+        ]);
+        row.appendChild(left);
+        row.appendChild(right);
+        recentCard.appendChild(row);
+      });
+    }
+    wrapper.appendChild(recentCard);
+
+    body.innerHTML = "";
+    body.appendChild(wrapper);
+  } catch (e) {
+    console.error("Student progress modal error", e);
+    body.innerHTML = "";
+    body.appendChild(
+      createEl("p", "text-[11px] text-red-600", [
+        "Unable to load student progress for this class.",
+      ])
+    );
+  }
+}
       // ---------------- Spaced Repetition ----------------
       const SpacedRepetition = {
         calculate(previous, quality) {
@@ -3491,7 +3719,9 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             "error"
           );
         }
-
+TeacherResultsState.classes = classes || [];
+TeacherResultsState.assignments = assignments || [];
+TeacherResultsState.submissions = submissions || [];
         const wrapper = createEl("div", "space-y-4", []);
         wrapper.appendChild(
           createEl("div", "flex items-center justify-between", [
@@ -3518,11 +3748,22 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         }
 
         const studentSet = new Set();
-        classes.forEach((c) => {
-          (c.studentIds || []).forEach((id) => studentSet.add(id));
-        });
+const studentInfoMap = {};
+classes.forEach((c) => {
+  (c.studentIds || []).forEach((id) => studentSet.add(id));
+  (c.students || []).forEach((s) => {
+    if (!s || !s.id) return;
+    const key = s.id;
+    if (!studentInfoMap[key]) {
+      studentInfoMap[key] = {
+        email: s.email || "",
+      };
+    }
+  });
+});
 
-        const now = Date.now();
+const now = Date.now();
+
         const activeAssignments = assignments.filter((a) => {
           if (!a.dueAt) return true;
           const ts = new Date(a.dueAt).getTime();
@@ -3555,7 +3796,103 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           ]
         );
         wrapper.appendChild(topRow);
+const studentCard = createEl(
+  "div",
+  "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+  []
+);
+studentCard.appendChild(
+  createEl("div", "flex items-center justify-between", [
+    createEl("h3", "text-xs font-semibold text-gray-800", [
+      "Students",
+    ]),
+    createEl("p", "text-[11px] text-gray-500", [
+      "Click a student to see their progress.",
+    ]),
+  ])
+);
 
+if (!studentSet.size) {
+  studentCard.appendChild(
+    createEl("p", "text-[11px] text-gray-500", [
+      "Once students join your classes and complete assignments, they’ll appear here.",
+    ])
+  );
+} else {
+  const subsByStudent = {};
+  submissions.forEach((s) => {
+    const uid = s.userId;
+    if (!uid) return;
+    if (!subsByStudent[uid]) subsByStudent[uid] = [];
+    subsByStudent[uid].push(s);
+  });
+
+  const list = createEl(
+    "div",
+    "divide-y divide-gray-100 border border-gray-100 rounded-lg mt-1",
+    []
+  );
+
+  Array.from(studentSet).forEach((id) => {
+    const subs = subsByStudent[id] || [];
+    const overview = AnalyticsService.computeStudentOverview(subs);
+    const label =
+      (studentInfoMap[id] && studentInfoMap[id].email) || id;
+
+    const assignmentsCount = subs.length;
+    const pct =
+      overview && typeof overview.avgScore === "number"
+        ? Math.round(overview.avgScore)
+        : null;
+    const ap =
+      overview && typeof overview.apPrediction === "number"
+        ? overview.apPrediction.toFixed(1)
+        : null;
+
+    const row = createEl(
+      "button",
+      "w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 focus:outline-none rounded-lg",
+      []
+    );
+
+    const left = createEl("div", "flex flex-col", [
+      createEl("span", "text-[11px] font-medium text-gray-900", [
+        label,
+      ]),
+      createEl("span", "text-[11px] text-gray-500", [
+        assignmentsCount
+          ? `${assignmentsCount} submission${
+              assignmentsCount === 1 ? "" : "s"
+            }`
+          : "No submissions yet",
+      ]),
+    ]);
+
+    const right = createEl("div", "flex flex-col items-end", [
+      createEl(
+        "span",
+        "text-[11px] font-semibold text-gray-900",
+        [pct == null ? "—" : pct + "%"]
+      ),
+      createEl("span", "text-[11px] text-gray-500", [
+        ap ? `AP ≈ ${ap}` : "",
+      ]),
+    ]);
+
+    row.appendChild(left);
+    row.appendChild(right);
+
+    row.addEventListener("click", () =>
+      openStudentProgressModal(id, label)
+    );
+
+    list.appendChild(row);
+  });
+
+  studentCard.appendChild(list);
+}
+
+wrapper.appendChild(studentCard);
         // Unit difficulty map
         const perUnitAgg = {};
         submissions.forEach((s) => {
