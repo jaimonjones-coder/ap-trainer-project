@@ -1,0 +1,3977 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Eduvate · AP Psychology Trainer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "SF Pro Display", "Segoe UI", sans-serif;
+        background-color: #f9fafb; /* Module 1: light gray background */
+        color: #111827; /* main text color */
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .bg-grid {
+        background-image: radial-gradient(
+          circle at 1px 1px,
+          rgb(148 163 184 / 0.18) 1px,
+          transparent 0
+        );
+        background-size: 20px 20px;
+      }
+      .tab-active {
+        /* Module 3: active tab uses blue */
+        background-color: #dbeafe; /* blue-100 */
+        border-color: #2563eb; /* blue-600 */
+        color: #1d4ed8; /* blue-700 */
+      }
+      .toast-banner {
+        z-index: 9999;
+      }
+    </style>
+
+    <!-- Firebase (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  </head>
+  <body
+    class="min-h-screen flex items-center justify-center px-4 py-6 bg-gray-50"
+  >
+    <div
+      class="w-full max-w-6xl bg-white rounded-3xl shadow-2xl shadow-gray-200/80 overflow-hidden grid md:grid-cols-2 border border-gray-200"
+    >
+      <!-- Left / Hero -->
+      <div
+        class="relative bg-white text-gray-900 p-8 md:p-10 flex flex-col justify-between border-b md:border-b-0 md:border-r border-gray-200"
+      >
+        <div
+          class="absolute inset-0 bg-grid opacity-50 pointer-events-none"
+        ></div>
+        <div class="relative z-10 space-y-4">
+          <div
+            class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-medium text-blue-700 mb-4"
+          >
+            <span class="h-1.5 w-1.5 rounded-full bg-green-500 mr-2"></span>
+            Eduvate · AP Psychology Coach
+          </div>
+          <h1 class="text-2xl md:text-3xl font-semibold leading-tight">
+            AI-powered practice<br />
+            for AP® Psychology
+          </h1>
+          <p class="text-xs md:text-sm text-gray-600 max-w-md leading-relaxed">
+            Smart mixed practice, spaced repetition, and real-time class
+            analytics in one lightweight web app. Designed for teachers and
+            students getting ready for the AP exam.
+          </p>
+
+          <div class="mt-6 grid grid-cols-3 gap-3 text-[11px]">
+            <div
+              class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm"
+            >
+              <p class="text-gray-500">Question bank</p>
+              <p class="text-gray-900 font-semibold mt-1">Units 1–9</p>
+            </div>
+            <div
+              class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm"
+            >
+              <p class="text-gray-500">Smart practice</p>
+              <p class="text-gray-900 font-semibold mt-1">
+                Weak units + SR
+              </p>
+            </div>
+            <div
+              class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm"
+            >
+              <p class="text-gray-500">Analytics</p>
+              <p class="text-gray-900 font-semibold mt-1">Class dashboards</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="relative z-10 mt-6 text-[11px] text-gray-500">
+          Built for teachers and students · FERPA-aware by design
+        </div>
+      </div>
+
+      <!-- Right / App Container -->
+      <div class="bg-gray-50 p-4 md:p-6 flex flex-col">
+        <!-- Auth View -->
+        <div id="auth-view" class="flex-1 flex flex-col">
+          <div class="mb-4">
+            <p class="text-[11px] font-medium text-gray-600 mb-1">
+              You are signing in as
+            </p>
+            <div
+              class="inline-flex rounded-full bg-gray-100 p-1 text-[11px] border border-gray-200"
+            >
+              <button
+                id="role-student"
+                type="button"
+                class="flex-1 px-3 py-1.5 rounded-full bg-white shadow-sm text-gray-900 font-medium border border-gray-200"
+                data-role="student"
+              >
+                Student
+              </button>
+              <button
+                id="role-teacher"
+                type="button"
+                class="flex-1 px-3 py-1.5 rounded-full text-gray-500 font-medium"
+                data-role="teacher"
+              >
+                Teacher
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="mb-3 flex items-center gap-2 text-[11px] text-gray-600"
+          >
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input
+                type="radio"
+                name="auth-mode"
+                value="login"
+                checked
+                class="h-3 w-3 text-blue-600 border-gray-300"
+              />
+              <span>Log in</span>
+            </label>
+            <label class="inline-flex items-center gap-1 cursor-pointer">
+              <input
+                type="radio"
+                name="auth-mode"
+                value="signup"
+                class="h-3 w-3 text-blue-600 border-gray-300"
+              />
+              <span>Create account</span>
+            </label>
+          </div>
+
+          <form id="auth-form" class="space-y-3 text-[11px]">
+            <div>
+              <label class="block text-gray-700 mb-1">Email</label>
+              <input
+                id="auth-email"
+                type="email"
+                required
+                class="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-gray-700 mb-1">Password</label>
+              <input
+                id="auth-password"
+                type="password"
+                required
+                minlength="6"
+                class="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500"
+              />
+            </div>
+            <p
+              id="auth-error"
+              class="hidden text-[11px] text-red-600"
+            ></p>
+            <button
+              type="submit"
+              class="w-full mt-1 inline-flex items-center justify-center px-3 py-2 rounded-xl bg-blue-600 text-white text-[11px] font-medium hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/80"
+            >
+              Continue
+            </button>
+          </form>
+
+          <div
+            class="mt-4 border-t border-gray-200 pt-3 space-y-2 text-[11px]"
+          >
+            <p class="text-gray-600">Or jump into a demo account:</p>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                id="demo-student"
+                type="button"
+                class="px-3 py-1.5 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 text-[11px] shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/80"
+              >
+                Demo student
+              </button>
+              <button
+                id="demo-teacher"
+                type="button"
+                class="px-3 py-1.5 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 text-[11px] shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/80"
+              >
+                Demo teacher
+              </button>
+            </div>
+            <p class="text-[10px] text-gray-500">
+              Demo data is shared across users and resets periodically.
+            </p>
+          </div>
+        </div>
+
+        <!-- App View -->
+        <div id="app-view" class="hidden flex-1 flex flex-col min-h-[420px]">
+          <!-- Top bar -->
+          <div class="flex items-center justify-between mb-3 text-[11px]">
+            <div>
+              <p class="text-xs font-semibold text-gray-900">
+                AP Psychology Trainer
+              </p>
+              <p id="user-subtitle" class="text-[11px] text-gray-500"></p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                id="role-pill"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-300"
+              >
+                <span
+                  class="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"
+                ></span>
+                <span>Student</span>
+              </span>
+              <button
+                id="logout-btn"
+                type="button"
+                class="px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500/80"
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div
+            id="tab-strip"
+            class="flex gap-1 mb-3 text-[11px] bg-gray-100 rounded-xl p-1 border border-gray-200"
+          ></div>
+
+          <!-- Content -->
+          <div
+            id="tab-content"
+            class="flex-1 bg-white border border-gray-200 rounded-2xl p-3 overflow-auto text-[11px]"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ---------------- Firebase init ----------------
+      const firebaseConfig = {
+        apiKey: "AIzaSyCiOzV4IScS0Cg1odtnIWaGGZVGCDnvQfQ",
+        authDomain: "ap-psychology-lms.firebaseapp.com",
+        projectId: "ap-psychology-lms",
+        storageBucket: "ap-psychology-lms.appspot.com",
+        messagingSenderId: "905910734852",
+        appId: "1:905910734852:web:77ee16fa84422fd2efe551",
+        measurementId: "G-J369F5TETL",
+      };
+
+      try {
+        firebase.initializeApp(firebaseConfig);
+      } catch (e) {
+        console.error("Firebase init error", e);
+      }
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+
+      // ---------------- Helpers ----------------
+      function $(id) {
+        return document.getElementById(id);
+      }
+
+      function createEl(tag, className = "", children = []) {
+        const el = document.createElement(tag);
+        if (className) el.className = className;
+        (children || []).forEach((child) => {
+          if (child == null) return;
+          if (typeof child === "string") {
+            el.appendChild(document.createTextNode(child));
+          } else if (child instanceof Node) {
+            el.appendChild(child);
+          }
+        });
+        return el;
+      }
+
+      const Toast = {
+        show(message, type = "info") {
+          const existing = document.querySelector(".toast-banner");
+          if (existing) existing.remove();
+          const colors = {
+            info: "bg-blue-600",
+            success: "bg-green-600",
+            error: "bg-red-600",
+          };
+          const div = createEl(
+            "div",
+            `toast-banner fixed top-3 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-white text-[11px] shadow-md ${
+              colors[type] || colors.info
+            }`,
+            [message]
+          );
+          document.body.appendChild(div);
+          setTimeout(() => div.remove(), 2600);
+        },
+      };
+
+      function statCard(label, value) {
+        // Blue stat card per design spec
+        return createEl(
+          "div",
+          "rounded-xl p-3 shadow-sm bg-blue-600 text-white flex flex-col justify-between",
+          [
+            createEl("p", "text-[10px] text-blue-100 mb-1 font-medium", [
+              label,
+            ]),
+            createEl("p", "text-sm font-semibold", [String(value)]),
+          ]
+        );
+      }
+
+      function unitBar(unit, accuracy, total, barClass) {
+        const pct = Math.round((accuracy || 0) * 100);
+        const wrapper = createEl("div", "mb-2", []);
+        wrapper.appendChild(
+          createEl(
+            "div",
+            "flex justify-between text-[11px] text-gray-700 mb-0.5",
+            [
+              `Unit ${unit}`,
+              total != null ? `${pct}% · ${total} Q` : `${pct}%`,
+            ]
+          )
+        );
+        const bar = createEl(
+          "div",
+          "w-full h-2 bg-gray-200 rounded-full overflow-hidden",
+          []
+        );
+        const fill = createEl(
+          "div",
+          `h-2 rounded-full ${barClass || "bg-blue-600"}`,
+          []
+        );
+        fill.style.width = `${pct}%`;
+        bar.appendChild(fill);
+        wrapper.appendChild(bar);
+        return wrapper;
+      }
+
+      function formatDateTimeISO(iso) {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return "—";
+        return d.toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      const AP_UNITS = [
+        "Scientific Foundations of Psychology",
+        "Biological Bases of Behavior",
+        "Sensation and Perception",
+        "Learning",
+        "Cognitive Psychology",
+        "Developmental Psychology",
+        "Motivation, Emotion, and Personality",
+        "Clinical Psychology",
+        "Social Psychology",
+      ];
+
+      // ---------------- Global app state ----------------
+      const AppState = {
+        user: null,
+        role: "student", // "student" | "teacher"
+        currentTab: null,
+        currentQuiz: null,
+      };
+
+      const TABS_BY_ROLE = {
+        student: [
+          { id: "dashboard", label: "Dashboard" },
+          { id: "classes", label: "Classes" },
+          { id: "assignments", label: "Assignments" },
+          { id: "practice", label: "Practice" },
+          { id: "analytics", label: "Analytics" },
+        ],
+        teacher: [
+          { id: "dashboard", label: "Dashboard" },
+          { id: "classes", label: "Classes" },
+          { id: "assignments", label: "Assignments" },
+          { id: "results", label: "Results" },
+        ],
+      };
+
+      // ---------------- Data Manager ----------------
+      const DataManager = {
+        async upsertUserProfile(uid, data) {
+          const ref = db.collection("users").doc(uid);
+          await ref.set(
+            {
+              ...data,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        },
+
+        async getUserProfile(uid) {
+          const snap = await db.collection("users").doc(uid).get();
+          return snap.exists ? snap.data() : null;
+        },
+
+        async createClass(name, teacherId, teacherEmail) {
+          const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const ref = await db.collection("classes").add({
+            name,
+            code,
+            teacherId,
+            teacherEmail,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            students: [],
+            studentIds: [],
+          });
+          const snap = await ref.get();
+          return { id: ref.id, ...snap.data() };
+        },
+
+        async listClassesForTeacher(teacherId) {
+          const snap = await db
+            .collection("classes")
+            .where("teacherId", "==", teacherId)
+            .orderBy("createdAt", "desc")
+            .get();
+          return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        },
+
+        async listClassesForStudent(studentId) {
+          // Primary: studentIds array
+          const snap = await db
+            .collection("classes")
+            .where("studentIds", "array-contains", studentId)
+            .get();
+          const primary = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          if (primary.length) return primary;
+
+          // Fallback: scan for embedded students
+          const all = await db.collection("classes").get();
+          return all.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((c) =>
+              (c.students || []).some((s) => s && s.id === studentId)
+            );
+        },
+
+        async joinClassByCode(code, studentId, email) {
+          const snap = await db
+            .collection("classes")
+            .where("code", "==", code.toUpperCase())
+            .limit(1)
+            .get();
+          if (snap.empty) {
+            throw new Error("Class code not found");
+          }
+          const doc = snap.docs[0];
+          const data = doc.data() || {};
+          const students = Array.isArray(data.students) ? data.students.slice() : [];
+          const studentIds = Array.isArray(data.studentIds)
+            ? data.studentIds.slice()
+            : [];
+          if (!studentIds.includes(studentId)) {
+            studentIds.push(studentId);
+            students.push({
+              id: studentId,
+              email,
+              joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            await doc.ref.update({ studentIds, students });
+          }
+          return { id: doc.id, ...data, students, studentIds };
+        },
+
+        async createAssignment(data) {
+          const ref = await db.collection("assignments").add({
+            ...data,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          const snap = await ref.get();
+          return { id: ref.id, ...snap.data() };
+        },
+
+        async listAssignmentsForTeacher(teacherId) {
+          const snap = await db
+            .collection("assignments")
+            .where("teacherId", "==", teacherId)
+            .orderBy("createdAt", "desc")
+            .get();
+          return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        },
+
+        async listAssignmentsForStudent(studentId) {
+          const classes = await this.listClassesForStudent(studentId);
+          const classIds = classes.map((c) => c.id);
+          if (!classIds.length) return [];
+          const allAssignments = [];
+          const idsCopy = classIds.slice();
+          while (idsCopy.length) {
+            const batchIds = idsCopy.splice(0, 10);
+            const snap = await db
+              .collection("assignments")
+              .where("classId", "in", batchIds)
+              .get();
+            snap.docs.forEach((d) => {
+              allAssignments.push({ id: d.id, ...d.data() });
+            });
+          }
+          allAssignments.sort((a, b) => {
+            const aDue =
+              (a.dueAt ? new Date(a.dueAt).getTime() : 0) ||
+              (a.createdAt && typeof a.createdAt.toMillis === "function"
+                ? a.createdAt.toMillis()
+                : 0);
+            const bDue =
+              (b.dueAt ? new Date(b.dueAt).getTime() : 0) ||
+              (b.createdAt && typeof b.createdAt.toMillis === "function"
+                ? b.createdAt.toMillis()
+                : 0);
+            return bDue - aDue;
+          });
+          return allAssignments;
+        },
+
+        async saveSubmission(submission) {
+          const ref = await db.collection("submissions").add({
+            ...submission,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          const snap = await ref.get();
+          return { id: ref.id, ...snap.data() };
+        },
+
+        async listSubmissionsForStudent(studentId) {
+          const snap = await db
+            .collection("submissions")
+            .where("userId", "==", studentId)
+            .orderBy("completedAt", "desc")
+            .get();
+          return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        },
+
+        async listSubmissionsForAssignment(assignmentId) {
+          const snap = await db
+            .collection("submissions")
+            .where("assignmentId", "==", assignmentId)
+            .orderBy("completedAt", "desc")
+            .get();
+          return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        },
+
+        async getQuestions(filter = {}) {
+          let ref = db.collection("questions");
+          if (filter.unit != null) {
+            ref = ref.where("unit", "==", filter.unit);
+          }
+          const snap = await ref.get();
+          const qs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          if (!qs.length) return QuestionService.seedQuestions(filter.unit);
+          return qs;
+        },
+
+        async batchUploadQuestions(questions) {
+          if (!questions.length) return { created: 0 };
+          // Firestore batch limit is 500
+          let created = 0;
+          const chunks = [];
+          const copy = questions.slice();
+          while (copy.length) {
+            chunks.push(copy.splice(0, 400));
+          }
+          for (const chunk of chunks) {
+            const batch = db.batch();
+            chunk.forEach((q) => {
+              const ref = db.collection("questions").doc();
+              batch.set(ref, {
+                ...q,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+            });
+            await batch.commit();
+            created += chunk.length;
+          }
+          return { created };
+        },
+      };
+
+      // ---------------- Question Service ----------------
+      const QuestionService = {
+        async getQuestions(filter = {}) {
+          return DataManager.getQuestions(filter);
+        },
+
+        async getByIds(ids) {
+          if (!ids || !ids.length) return [];
+          const chunks = [];
+          const idsCopy = ids.slice();
+          while (idsCopy.length) {
+            const batchIds = idsCopy.splice(0, 10);
+            const snap = await db
+              .collection("questions")
+              .where(
+                firebase.firestore.FieldPath.documentId(),
+                "in",
+                batchIds
+              )
+              .get();
+            snap.docs.forEach((d) => chunks.push({ id: d.id, ...d.data() }));
+          }
+          const map = new Map(chunks.map((q) => [q.id, q]));
+          return ids.map((id) => map.get(id)).filter(Boolean);
+        },
+
+        seedQuestions(unitFilter) {
+          const seed = [
+            {
+              id: "seed-1",
+              unit: 1,
+              skill: "Research Methods",
+              difficulty: "standard",
+              question:
+                "A researcher wants to study the effect of sleep deprivation on test performance. The group that receives no sleep is called the:",
+              options: [
+                "Control group",
+                "Random sample",
+                "Experimental group",
+                "Placebo group",
+              ],
+              correctIndex: 2,
+              explanation:
+                "The experimental group receives the independent variable (sleep deprivation) so its performance can be compared to a control group.",
+            },
+            {
+              id: "seed-2",
+              unit: 2,
+              skill: "Biological Bases",
+              difficulty: "standard",
+              question:
+                "Which structure of the neuron receives messages from other neurons?",
+              options: ["Axon", "Myelin sheath", "Dendrites", "Synapse"],
+              correctIndex: 2,
+              explanation:
+                "Dendrites receive incoming signals from neighboring neurons.",
+            },
+          ];
+          return seed.filter((q) => !unitFilter || q.unit === unitFilter);
+        },
+      };
+
+      // ---------------- Analytics Service ----------------
+      const AnalyticsService = {
+        computeStudentOverview(submissions) {
+          if (!submissions || !submissions.length) {
+            return {
+              stats: { answered: 0, correct: 0, streak: 0 },
+              avgScore: 0,
+              apPrediction: 1,
+              unitStats: {},
+            };
+          }
+          let answered = 0;
+          let correct = 0;
+          const unitStats = {};
+          const scores = [];
+
+          submissions.forEach((s) => {
+            const total = s.totalQuestions || s.numQuestions || 0;
+            const corr = s.correctCount || s.numCorrect || 0;
+            answered += total;
+            correct += corr;
+            const score =
+              typeof s.scorePercent === "number"
+                ? s.scorePercent
+                : total
+                ? (corr / total) * 100
+                : null;
+            if (score != null) scores.push(score);
+
+            const perUnit = s.perUnit || {};
+            Object.entries(perUnit).forEach(([unit, data]) => {
+              const uKey = Number(unit);
+              if (!unitStats[uKey]) {
+                unitStats[uKey] = { answered: 0, correct: 0 };
+              }
+              unitStats[uKey].answered += data.answered || 0;
+              unitStats[uKey].correct += data.correct || 0;
+            });
+          });
+
+          const avgScore =
+            scores.length > 0
+              ? scores.reduce((a, b) => a + b, 0) / scores.length
+              : 0;
+
+          let apPrediction = 1;
+          if (avgScore >= 85) apPrediction = 5;
+          else if (avgScore >= 70) apPrediction = 4;
+          else if (avgScore >= 60) apPrediction = 3;
+          else if (avgScore >= 45) apPrediction = 2;
+          else apPrediction = 1;
+
+          const streak = (() => {
+            const sorted = submissions
+              .slice()
+              .sort(
+                (a, b) =>
+                  new Date(a.completedAt || 0) - new Date(b.completedAt || 0)
+              )
+              .slice(-10);
+            let s = 0;
+            for (let i = sorted.length - 1; i >= 0; i--) {
+              const sub = sorted[i];
+              const total = sub.totalQuestions || sub.numQuestions || 0;
+              const corr = sub.correctCount || sub.numCorrect || 0;
+              const pct =
+                total > 0
+                  ? (corr / total) * 100
+                  : sub.scorePercent || 0;
+              if (pct >= 60) s++;
+              else break;
+            }
+            return s;
+          })();
+
+          return {
+            stats: { answered, correct, streak },
+            avgScore,
+            apPrediction,
+            unitStats,
+          };
+        },
+
+        summarizeUnits(unitStats) {
+          return Object.entries(unitStats).map(([unit, data]) => ({
+            unit: Number(unit),
+            total: data.answered || 0,
+            accuracy: data.answered > 0 ? data.correct / data.answered : 0,
+          }));
+        },
+      };
+
+      // ---------------- Spaced Repetition ----------------
+      const SpacedRepetition = {
+        calculate(previous, quality) {
+          const now = Date.now();
+          let card =
+            previous || {
+              interval: 0,
+              repetitions: 0,
+              easeFactor: 2.5,
+              nextReview: now,
+              lastReviewed: null,
+              totalSeen: 0,
+              totalCorrect: 0,
+            };
+          quality = Math.max(0, Math.min(5, quality));
+          card.easeFactor =
+            card.easeFactor +
+            (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+          if (card.easeFactor < 1.3) card.easeFactor = 1.3;
+          if (quality < 3) {
+            card.repetitions = 0;
+            card.interval = 1;
+          } else {
+            card.repetitions = (card.repetitions || 0) + 1;
+            if (card.repetitions === 1) card.interval = 1;
+            else if (card.repetitions === 2) card.interval = 6;
+            else card.interval = Math.round(card.interval * card.easeFactor);
+          }
+          card.totalSeen = (card.totalSeen || 0) + 1;
+          if (quality >= 3) {
+            card.totalCorrect = (card.totalCorrect || 0) + 1;
+          }
+          const msPerDay = 24 * 60 * 60 * 1000;
+          card.lastReviewed = now;
+          card.nextReview = now + card.interval * msPerDay;
+          return card;
+        },
+
+        async getSRMap(userId) {
+          const col = db.collection("users").doc(userId).collection("sr");
+          const snap = await col.get();
+          const map = {};
+          snap.docs.forEach((d) => (map[d.id] = d.data()));
+          return map;
+        },
+
+        async getDueQuestions(userId, limitCount = 20) {
+          const map = await this.getSRMap(userId);
+          const now = Date.now();
+          const entries = Object.entries(map);
+          const due = entries
+            .filter(([_, card]) => {
+              if (!card.nextReview) return true;
+              return card.nextReview <= now;
+            })
+            .map(([id, card]) => ({ id, ...card }));
+          due.forEach((c) => (c.priority = this.calculatePriority(c)));
+          due.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+          return due.slice(0, limitCount);
+        },
+
+        async updateAfterAnswer(userId, questionId, correct) {
+          const ref = db
+            .collection("users")
+            .doc(userId)
+            .collection("sr")
+            .doc(questionId);
+          const snap = await ref.get();
+          const prev = snap.exists ? snap.data() : null;
+          const quality = correct ? 5 : 2;
+          const updated = this.calculate(prev, quality);
+          await ref.set(updated, { merge: true });
+        },
+
+        calculatePriority(card) {
+          const now = Date.now();
+          const next = card.nextReview || now;
+          const overdueMs = Math.max(0, now - next);
+          const overdueDays = overdueMs / (1000 * 60 * 60 * 24);
+          const ef = card.easeFactor || 2.5;
+          const reps = card.repetitions || 0;
+          return overdueDays * 2 + (3 - Math.min(ef, 3)) + (reps < 3 ? 1 : 0);
+        },
+
+        async getStats(userId) {
+          const map = await this.getSRMap(userId);
+          const ids = Object.keys(map);
+          const totalCards = ids.length;
+          const now = Date.now();
+          const soonThreshold = now + 2 * 24 * 60 * 60 * 1000;
+          let dueNow = 0;
+          let dueSoon = 0;
+          let mastered = 0;
+          ids.forEach((id) => {
+            const card = map[id] || {};
+            const next = card.nextReview || now;
+            if (!card.nextReview || next <= now) dueNow++;
+            else if (next <= soonThreshold) dueSoon++;
+            if (
+              (card.repetitions || 0) >= 5 &&
+              (card.easeFactor || 2.5) >= 2.3
+            )
+              mastered++;
+          });
+          return { totalCards, dueNow, dueSoon, mastered };
+        },
+      };
+
+      // ---------------- Next Best Action ----------------
+      function computeNextBestAction({ overview, unitSummary, srDueCount }) {
+        const stats = overview?.stats || {};
+        const answered = stats.answered || 0;
+        const sortedUnits = (unitSummary || [])
+          .filter((u) => u.total >= 10)
+          .slice()
+          .sort((a, b) => a.accuracy - b.accuracy);
+        const weakest = sortedUnits[0] || null;
+
+        if (!answered || answered < 10) {
+          return {
+            mode: "unit",
+            unit: 1,
+            limit: 10,
+            title: "Start with Unit 1",
+            message:
+              "You’re new here. Begin with 10 questions from Unit 1 – Scientific Foundations of Psychology.",
+            cta: "Start Unit 1 practice",
+          };
+        }
+
+        if (weakest && weakest.accuracy < 0.6) {
+          const pct = Math.round(weakest.accuracy * 100);
+          return {
+            mode: "unit",
+            unit: weakest.unit,
+            limit: 10,
+            title: `Focus on Unit ${weakest.unit}`,
+            message: `Unit ${weakest.unit} is currently at ${pct}% accuracy. Do a focused 10-question set to shore it up.`,
+            cta: `Practice Unit ${weakest.unit}`,
+          };
+        }
+
+        if (srDueCount && srDueCount >= 10) {
+          return {
+            mode: "sr",
+            title: "Clear your due SR cards",
+            message: `You have ${srDueCount} spaced repetition cards due. Clear them out to keep your memory fresh.`,
+            cta: "Start SR review",
+          };
+        }
+
+        return {
+          mode: "smart",
+          limit: 10,
+          title: "Smart mixed practice",
+          message:
+            "You don’t have urgent weak spots. Do a 10-question smart mixed set to keep everything warm.",
+          cta: "Start smart practice",
+        };
+      }
+
+      function renderNextBestActionCard(action) {
+        const card = createEl(
+          "div",
+          "bg-blue-50 border border-blue-100 rounded-xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+        );
+        const left = createEl("div", "", [
+          createEl("p", "text-[11px] font-semibold text-blue-700", [
+            "Next best step",
+          ]),
+          createEl("p", "text-xs text-gray-700 mt-0.5", [action.message]),
+        ]);
+        const btn = createEl(
+          "button",
+          "self-start md:self-auto inline-flex items-center justify-center px-3 py-1.5 rounded-full bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/80",
+          [action.cta || "Start recommended practice"]
+        );
+        btn.addEventListener("click", () => {
+          startPractice({
+            mode: action.mode,
+            unit: action.unit,
+            limit: action.limit,
+          });
+        });
+        card.appendChild(left);
+        card.appendChild(btn);
+        return card;
+      }
+
+      // ---------------- Practice + Quiz Engine ----------------
+      async function startPractice({ mode, unit, limit }) {
+        const userId = AppState.user.uid;
+        let questions = [];
+
+        try {
+          if (mode === "sr") {
+            const dueSR = await SpacedRepetition.getDueQuestions(userId, 20);
+            if (!dueSR.length) {
+              Toast.show("No SR cards due. Try smart practice instead.", "info");
+              return;
+            }
+            const ids = dueSR.map((d) => d.id);
+            questions = await QuestionService.getByIds(ids);
+          } else if (mode === "unit") {
+            questions = await QuestionService.getQuestions({ unit });
+            if (limit && questions.length > limit) {
+              questions = questions.slice(0, limit);
+            }
+          } else if (mode === "smart") {
+            const dueSR = await SpacedRepetition.getDueQuestions(userId, 10);
+            const idsSR = dueSR.map((d) => d.id);
+            const srQuestions = idsSR.length
+              ? await QuestionService.getByIds(idsSR)
+              : [];
+            const submissions = await DataManager.listSubmissionsForStudent(
+              userId
+            );
+            const overview =
+              AnalyticsService.computeStudentOverview(submissions);
+            const unitSummary = AnalyticsService.summarizeUnits(
+              overview.unitStats
+            );
+            const weakUnits = unitSummary
+              .filter((u) => u.total >= 10)
+              .sort((a, b) => a.accuracy - b.accuracy)
+              .slice(0, 3)
+              .map((u) => u.unit);
+            let weakQuestions = [];
+            for (const wu of weakUnits) {
+              const q = await QuestionService.getQuestions({ unit: wu });
+              weakQuestions = weakQuestions.concat(q);
+            }
+            if (!srQuestions.length && !weakQuestions.length) {
+              weakQuestions = await QuestionService.getQuestions();
+            }
+            let combined = [...srQuestions, ...weakQuestions];
+            const map = new Map();
+            combined.forEach((q) => map.set(q.id, q));
+            questions = Array.from(map.values());
+            if (limit && questions.length > limit) {
+              questions = questions
+                .sort(() => Math.random() - 0.5)
+                .slice(0, limit);
+            }
+          } else {
+            questions = await QuestionService.getQuestions();
+          }
+        } catch (e) {
+          console.error("Error loading practice questions", e);
+          Toast.show("Unable to load questions. Check Firestore rules.", "error");
+          return;
+        }
+
+        if (!questions.length) {
+          Toast.show("No questions available.", "error");
+          return;
+        }
+
+        startQuizSession({ mode, questions });
+      }
+
+      async function startTimedPractice({
+        unitMode,
+        questionCount,
+        timeLimitMinutes,
+      }) {
+        const userId = AppState.user.uid;
+        let questions = [];
+        try {
+          if (unitMode === "all") {
+            const all = await QuestionService.getQuestions();
+            const shuffled = [...all].sort(() => Math.random() - 0.5);
+            questions = shuffled.slice(0, questionCount);
+          } else if (unitMode === "weak") {
+            const submissions = await DataManager.listSubmissionsForStudent(
+              userId
+            );
+            const overview =
+              AnalyticsService.computeStudentOverview(submissions);
+            const unitSummary = AnalyticsService.summarizeUnits(
+              overview.unitStats
+            );
+            const weakUnits = unitSummary
+              .filter((u) => u.total >= 10)
+              .sort((a, b) => a.accuracy - b.accuracy)
+              .slice(0, 3)
+              .map((u) => u.unit);
+            let pool = [];
+            for (const unit of weakUnits) {
+              const qs = await QuestionService.getQuestions({ unit });
+              pool = pool.concat(qs);
+            }
+            const unique = Array.from(
+              new Map(pool.map((q) => [q.id, q])).values()
+            );
+            const shuffled = unique.sort(() => Math.random() - 0.5);
+            questions = shuffled.slice(0, questionCount);
+          } else {
+            const all = await QuestionService.getQuestions({
+              unit: Number(unitMode),
+            });
+            const shuffled = [...all].sort(() => Math.random() - 0.5);
+            questions = shuffled.slice(0, questionCount);
+          }
+        } catch (e) {
+          console.error("Error loading timed questions", e);
+          Toast.show("Unable to load questions. Check Firestore rules.", "error");
+          return;
+        }
+
+        if (!questions.length) {
+          Toast.show(
+            "No questions available for this configuration.",
+            "error"
+          );
+          return;
+        }
+
+        const pseudoAssignment = {
+          id: `timed_practice_${Date.now()}`,
+          title: `Timed Practice (${questionCount} Q)`,
+          classId: null,
+          type: "timedPractice",
+          timeLimitMinutes,
+          isPractice: true,
+        };
+
+        startQuizSession({
+          mode: "timedPractice",
+          assignment: pseudoAssignment,
+          questions,
+          timeLimitMinutes,
+        });
+      }
+
+      let quizTimerInterval = null;
+
+      function startQuizSession({ mode, assignment, questions, timeLimitMinutes }) {
+        AppState.currentQuiz = {
+          mode,
+          assignment: assignment || null,
+          questions,
+          index: 0,
+          startedAt: Date.now(),
+          answers: [],
+          timeLimitMinutes:
+            timeLimitMinutes != null
+              ? timeLimitMinutes
+              : assignment?.timeLimitMinutes || null,
+        };
+        AppState.currentTab = "practice";
+        renderTabs();
+        renderCurrentTab();
+      }
+
+      function renderQuiz() {
+        const quiz = AppState.currentQuiz;
+        const content = $("tab-content");
+        if (!quiz) {
+          content.innerHTML =
+            "<p class='text-xs text-gray-500'>No quiz in progress.</p>";
+          return;
+        }
+        const q = quiz.questions[quiz.index];
+        const answered = quiz.answers[quiz.index];
+        const wrapper = createEl("div", "space-y-3", []);
+        const header = createEl(
+          "div",
+          "flex justify-between items-center text-[11px] text-gray-600",
+          [
+            createEl("span", "", [
+              `Question ${quiz.index + 1} of ${quiz.questions.length}`,
+            ]),
+          ]
+        );
+
+        if (quiz.timeLimitMinutes) {
+          const timerEl = createEl("span", "font-mono", [""]);
+          header.appendChild(timerEl);
+          if (!quizTimerInterval) {
+            const endTime =
+              quiz.startedAt + quiz.timeLimitMinutes * 60 * 1000;
+            quizTimerInterval = setInterval(() => {
+              const now = Date.now();
+              const remaining = Math.max(0, endTime - now);
+              const mins = Math.floor(remaining / 60000);
+              const secs = Math.floor((remaining % 60000) / 1000);
+              timerEl.textContent = `${mins}:${secs
+                .toString()
+                .padStart(2, "0")}`;
+              if (remaining <= 0) {
+                clearInterval(quizTimerInterval);
+                quizTimerInterval = null;
+                finishQuiz(true);
+              }
+            }, 1000);
+          }
+        }
+
+        wrapper.appendChild(header);
+
+        const qCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+          []
+        );
+        qCard.appendChild(
+          createEl("p", "text-xs font-semibold text-gray-900", [q.question])
+        );
+        const list = createEl("div", "space-y-1", []);
+        q.options.forEach((opt, idx) => {
+          const isSelected = answered === idx;
+          const btn = createEl(
+            "button",
+            "w-full text-left px-3 py-2 rounded-lg border text-xs transition-colors " +
+              (isSelected
+                ? "border-blue-600 bg-blue-50 text-blue-800"
+                : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"),
+            [opt]
+          );
+          btn.addEventListener("click", () => {
+            quiz.answers[quiz.index] = idx;
+            renderQuiz();
+          });
+          list.appendChild(btn);
+        });
+        qCard.appendChild(list);
+        wrapper.appendChild(qCard);
+
+        const controls = createEl(
+          "div",
+          "flex justify-between items-center mt-2",
+          []
+        );
+        const prevBtn = createEl(
+          "button",
+          "px-3 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          ["Previous"]
+        );
+        prevBtn.disabled = quiz.index === 0;
+        prevBtn.addEventListener("click", () => {
+          if (quiz.index > 0) {
+            quiz.index--;
+            renderQuiz();
+          }
+        });
+        const nextBtn = createEl(
+          "button",
+          "px-3 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          ["Next"]
+        );
+        nextBtn.disabled = quiz.index === quiz.questions.length - 1;
+        nextBtn.addEventListener("click", () => {
+          if (quiz.index < quiz.questions.length - 1) {
+            quiz.index++;
+            renderQuiz();
+          }
+        });
+        const finishBtn = createEl(
+          "button",
+          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          ["Finish"]
+        );
+        finishBtn.addEventListener("click", () => {
+          if (
+            confirm(
+              "Finish this quiz and view results? You won't be able to change answers."
+            )
+          ) {
+            finishQuiz(false);
+          }
+        });
+        controls.appendChild(prevBtn);
+        controls.appendChild(nextBtn);
+        controls.appendChild(finishBtn);
+        wrapper.appendChild(controls);
+
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      async function finishQuiz(autoFromTimer) {
+        const quiz = AppState.currentQuiz;
+        if (!quiz) return;
+        if (quizTimerInterval) {
+          clearInterval(quizTimerInterval);
+          quizTimerInterval = null;
+        }
+
+        const questions = quiz.questions;
+        const answers = quiz.answers;
+        let correctCount = 0;
+        const perUnit = {};
+        const questionResults = [];
+
+        for (let idx = 0; idx < questions.length; idx++) {
+          const q = questions[idx];
+          const chosenIndex = answers[idx] === undefined ? null : answers[idx];
+          const isCorrect = chosenIndex === q.correctIndex;
+          if (isCorrect) correctCount++;
+          const unit = q.unit || 0;
+          if (!perUnit[unit]) perUnit[unit] = { answered: 0, correct: 0 };
+          perUnit[unit].answered += 1;
+          if (isCorrect) perUnit[unit].correct += 1;
+
+          if (AppState.user) {
+            try {
+              SpacedRepetition.updateAfterAnswer(
+                AppState.user.uid,
+                q.id,
+                isCorrect
+              );
+            } catch (e) {
+              console.error("SR update error", e);
+            }
+          }
+
+          questionResults.push({
+            questionId: q.id,
+            question: q.question,
+            options: q.options,
+            correctIndex: q.correctIndex,
+            chosenIndex,
+            isCorrect,
+            explanation: q.explanation || "",
+            distractorNotes: q.distractorNotes || null,
+            unit: q.unit || null,
+          });
+        }
+
+        const total = questions.length;
+        const scorePercent = total > 0 ? (correctCount / total) * 100 : 0;
+
+        // Persist submission
+        if (AppState.user) {
+          try {
+            await DataManager.saveSubmission({
+              userId: AppState.user.uid,
+              assignmentId: quiz.assignment?.id || null,
+              mode: quiz.mode,
+              isPractice:
+                quiz.assignment?.isPractice || quiz.mode !== "assignment",
+              totalQuestions: total,
+              correctCount,
+              scorePercent,
+              perUnit,
+              questionResults,
+              startedAt: new Date(quiz.startedAt).toISOString(),
+              completedAt: new Date().toISOString(),
+            });
+          } catch (e) {
+            console.error("Error saving submission", e);
+          }
+        }
+
+        const content = $("tab-content");
+        const wrapper = createEl("div", "space-y-3", []);
+        wrapper.appendChild(
+          createEl("h2", "text-sm font-semibold text-gray-900", [
+            autoFromTimer ? "Time's up! Here's how you did:" : "Results",
+          ])
+        );
+        wrapper.appendChild(
+          createEl("p", "text-xs text-gray-600", [
+            `You answered ${correctCount} of ${total} correctly (${Math.round(
+              scorePercent
+            )}%).`,
+          ])
+        );
+
+        const perUnitCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
+          []
+        );
+        perUnitCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
+            "By-unit breakdown",
+          ])
+        );
+        Object.entries(perUnit).forEach(([unit, data]) => {
+          const acc = data.answered > 0 ? data.correct / data.answered : 0;
+          perUnitCard.appendChild(
+            unitBar(unit, acc, data.answered, "bg-blue-600")
+          );
+        });
+        wrapper.appendChild(perUnitCard);
+
+        const detailCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm",
+          []
+        );
+        detailCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
+            "Question review",
+          ])
+        );
+
+        questionResults.forEach((qr, idx) => {
+          const qWrap = createEl(
+            "div",
+            "border border-gray-200 rounded-lg p-3 space-y-1",
+            []
+          );
+          qWrap.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", [
+              `${idx + 1}. ${qr.question}`,
+            ])
+          );
+          const yourAnsText =
+            qr.chosenIndex == null
+              ? "No answer selected"
+              : qr.options[qr.chosenIndex];
+          const yourAnsClass =
+            qr.chosenIndex == null
+              ? "text-gray-600"
+              : qr.isCorrect
+              ? "text-green-700"
+              : "text-red-700";
+          qWrap.appendChild(
+            createEl("p", "text-[11px] " + yourAnsClass, [
+              "Your answer: ",
+              yourAnsText,
+            ])
+          );
+          qWrap.appendChild(
+            createEl("p", "text-[11px] text-gray-800", [
+              "Correct answer: ",
+              qr.options[qr.correctIndex],
+            ])
+          );
+          if (qr.explanation) {
+            qWrap.appendChild(
+              createEl("p", "text-[11px] text-gray-700 mt-1", [
+                "Explanation: ",
+                qr.explanation,
+              ])
+            );
+          }
+// Per-choice "magic" explanations
+if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
+  const explList = createEl(
+    "ul",
+    "mt-1 space-y-1 text-[11px] text-gray-700",
+    []
+  );
+
+  qr.options.forEach((opt, i) => {
+    const letter = String.fromCharCode(65 + i); // A, B, C, D...
+    const note = qr.distractorNotes[letter];
+
+    explList.appendChild(
+      createEl("li", "", [
+        `${letter}. ${opt} — `,
+        note ||
+          (i === qr.correctIndex
+            ? "This is the correct answer."
+            : "This option is incorrect."),
+      ])
+    );
+  });
+
+  qWrap.appendChild(explList);
+}
+
+
+          detailCard.appendChild(qWrap);
+        });
+
+        wrapper.appendChild(detailCard);
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+
+        AppState.currentQuiz = null;
+      }
+
+      // ---------------- Student Views ----------------
+      async function renderStudentDashboard() {
+        const content = $("tab-content");
+        content.innerHTML =
+          "<p class='text-[11px] text-gray-500'>Loading your dashboard…</p>";
+
+        const userId = AppState.user.uid;
+        let submissions = [];
+        let srStats = { totalCards: 0, dueNow: 0, dueSoon: 0, mastered: 0 };
+
+        try {
+          const [subs, sr] = await Promise.all([
+            DataManager.listSubmissionsForStudent(userId),
+            SpacedRepetition.getStats(userId),
+          ]);
+          submissions = subs || [];
+          srStats = sr || srStats;
+        } catch (e) {
+          console.error("Student dashboard error", e);
+          Toast.show(
+            "Some data could not load (check Firestore rules). Showing what we can.",
+            "error"
+          );
+        }
+
+        const overview = AnalyticsService.computeStudentOverview(submissions);
+        const unitSummary = AnalyticsService.summarizeUnits(
+          overview.unitStats
+        );
+        const stats = overview.stats;
+        const answered = stats.answered || 0;
+        const correct = stats.correct || 0;
+        const pct =
+          answered > 0 ? Math.round((correct / answered) * 100) : "—";
+        const ap = overview.apPrediction || "—";
+
+        const wrapper = createEl("div", "space-y-4", []);
+        wrapper.appendChild(
+          createEl("div", "flex items-center justify-between", [
+            createEl("div", "", [
+              createEl("h1", "text-sm font-semibold text-gray-900", [
+                "Welcome back",
+              ]),
+              createEl("p", "text-[11px] text-gray-600", [
+                "Your AP Psychology progress snapshot.",
+              ]),
+            ]),
+          ])
+        );
+
+        const topRow = createEl(
+          "div",
+          "grid grid-cols-1 md:grid-cols-3 gap-3",
+          [
+            statCard(
+              "Overall accuracy",
+              pct === "—" ? "—" : pct + "%"
+            ),
+            statCard("AP score prediction", "≈ " + ap),
+            statCard("SR cards mastered", srStats.mastered || 0),
+          ]
+        );
+        wrapper.appendChild(topRow);
+
+        const action = computeNextBestAction({
+          overview,
+          unitSummary,
+          srDueCount: srStats.dueNow || 0,
+        });
+        wrapper.appendChild(renderNextBestActionCard(action));
+
+        const unitCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
+          []
+        );
+        unitCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
+            "Unit performance",
+          ])
+        );
+        if (!unitSummary.length) {
+          unitCard.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "You’ll see per-unit performance once you’ve completed more practice.",
+            ])
+          );
+        } else {
+          unitSummary.forEach((u) => {
+            unitCard.appendChild(
+              unitBar(
+                u.unit,
+                u.accuracy,
+                u.total,
+                u.accuracy >= 0.7 ? "bg-green-600" : "bg-amber-500"
+              )
+            );
+          });
+        }
+        wrapper.appendChild(unitCard);
+
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      async function renderStudentClasses() {
+        const content = $("tab-content");
+        content.innerHTML = "";
+        const wrapper = createEl("div", "space-y-3", []);
+        wrapper.appendChild(
+          createEl("h2", "text-sm font-semibold text-gray-900", ["Classes"])
+        );
+
+        const joinRow = createEl(
+          "div",
+          "flex flex-col sm:flex-row gap-2 items-start sm:items-center",
+          []
+        );
+        const codeInput = createEl(
+          "input",
+          "px-2 py-1.5 border border-gray-300 rounded-lg text-[11px] flex-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        codeInput.placeholder = "Join class with code";
+        const joinBtn = createEl(
+          "button",
+          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          ["Join"]
+        );
+        joinBtn.addEventListener("click", async () => {
+          const code = (codeInput.value || "").trim();
+          if (!code) return;
+          try {
+            await DataManager.joinClassByCode(
+              code,
+              AppState.user.uid,
+              AppState.user.email || ""
+            );
+            Toast.show("Joined class!", "success");
+            renderStudentClasses();
+          } catch (e) {
+            console.error("Join class error", e);
+            Toast.show(e.message || "Error joining class.", "error");
+          }
+        });
+        joinRow.appendChild(codeInput);
+        joinRow.appendChild(joinBtn);
+        wrapper.appendChild(joinRow);
+
+        let classes = [];
+        try {
+          classes = await DataManager.listClassesForStudent(AppState.user.uid);
+        } catch (e) {
+          console.error("List classes error", e);
+          Toast.show(
+            "Unable to load classes (check Firestore rules).",
+            "error"
+          );
+        }
+
+        if (!classes.length) {
+          wrapper.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "You’re not in any classes yet. Ask your teacher for a class code.",
+            ])
+          );
+        } else {
+          const list = createEl("div", "space-y-2", []);
+          classes.forEach((c) => {
+            const card = createEl(
+              "div",
+              "bg-white border border-gray-200 rounded-xl p-3 flex justify-between items-center shadow-sm",
+              []
+            );
+            const left = createEl("div", "", [
+              createEl("p", "text-xs font-semibold text-gray-900", [
+                c.name || "Class",
+              ]),
+              createEl("p", "text-[11px] text-gray-500", [
+                "Code: " + (c.code || "—"),
+              ]),
+            ]);
+            card.appendChild(left);
+            list.appendChild(card);
+          });
+          wrapper.appendChild(list);
+        }
+
+        content.appendChild(wrapper);
+      }
+
+      function renderSubmissionReview(sub) {
+        const content = $("tab-content");
+        const wrapper = createEl("div", "space-y-3", []);
+        wrapper.appendChild(
+          createEl("h2", "text-sm font-semibold text-gray-900", [
+            "Submission review",
+          ])
+        );
+        wrapper.appendChild(
+          createEl("p", "text-[11px] text-gray-600", [
+            `Score: ${Math.round(sub.scorePercent || 0)}% · ${
+              sub.correctCount || 0
+            }/${sub.totalQuestions || 0}`,
+          ])
+        );
+
+        const list = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm",
+          []
+        );
+        (sub.questionResults || []).forEach((qr, idx) => {
+          const qWrap = createEl(
+            "div",
+            "border border-gray-200 rounded-lg p-3 space-y-1",
+            []
+          );
+          qWrap.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", [
+              `${idx + 1}. ${qr.question}`,
+            ])
+          );
+          const yourAnsText =
+            qr.chosenIndex == null
+              ? "No answer selected"
+              : qr.options[qr.chosenIndex];
+          const yourAnsClass =
+            qr.chosenIndex == null
+              ? "text-gray-600"
+              : qr.isCorrect
+              ? "text-green-700"
+              : "text-red-700";
+          qWrap.appendChild(
+            createEl("p", "text-[11px] " + yourAnsClass, [
+              "Your answer: ",
+              yourAnsText,
+            ])
+          );
+          qWrap.appendChild(
+            createEl("p", "text-[11px] text-gray-800", [
+              "Correct answer: ",
+              qr.options[qr.correctIndex],
+            ])
+          );
+          if (qr.explanation) {
+            qWrap.appendChild(
+              createEl("p", "text-[11px] text-gray-700 mt-1", [
+                "Explanation: ",
+                qr.explanation,
+              ])
+            );
+          }
+// Per-choice "magic" explanations
+if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
+  const explList = createEl(
+    "ul",
+    "mt-1 space-y-1 text-[11px] text-gray-700",
+    []
+  );
+
+  qr.options.forEach((opt, i) => {
+    const letter = String.fromCharCode(65 + i); // A, B, C, D...
+    const note = qr.distractorNotes[letter];
+
+    explList.appendChild(
+      createEl("li", "", [
+        `${letter}. ${opt} — `,
+        note ||
+          (i === qr.correctIndex
+            ? "This is the correct answer."
+            : "This option is incorrect."),
+      ])
+    );
+  });
+
+  qWrap.appendChild(explList);
+}
+
+
+          list.appendChild(qWrap);
+        });
+        wrapper.appendChild(list);
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      async function renderStudentAssignments() {
+        const content = $("tab-content");
+        content.innerHTML =
+          "<p class='text-[11px] text-gray-500'>Loading assignments…</p>";
+        const userId = AppState.user.uid;
+
+        let assignments = [];
+        let submissions = [];
+        try {
+          const [a, s] = await Promise.all([
+            DataManager.listAssignmentsForStudent(userId),
+            DataManager.listSubmissionsForStudent(userId),
+          ]);
+          assignments = a || [];
+          submissions = s || [];
+        } catch (e) {
+          console.error("Student assignments error", e);
+          Toast.show(
+            "Assignments could not load (check Firestore rules).",
+            "error"
+          );
+        }
+
+        const wrapper = createEl("div", "space-y-3", []);
+        wrapper.appendChild(
+          createEl("h2", "text-sm font-semibold text-gray-900", [
+            "Assignments & practice",
+          ])
+        );
+
+        if (!assignments.length) {
+          wrapper.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "No teacher-assigned work yet. You can still use the Practice tab anytime.",
+            ])
+          );
+        } else {
+          const list = createEl("div", "space-y-2", []);
+          assignments.forEach((a) => {
+            const subsForAssignment = submissions.filter(
+              (s) => s.assignmentId === a.id
+            );
+            const lastSub = subsForAssignment[0] || null;
+            const lastScore = lastSub?.scorePercent;
+            const scoreLabel =
+              lastScore == null ? "Not attempted yet" : `${Math.round(lastScore)}%`;
+
+            const dueISO = a.dueAt || null;
+            const dueLabel = dueISO ? formatDateTimeISO(dueISO) : "No due date";
+            const now = Date.now();
+            const dueTs = dueISO ? new Date(dueISO).getTime() : null;
+            let status = "Active";
+            if (dueTs && dueTs < now) status = "Overdue";
+
+            const card = createEl(
+              "div",
+              "bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3 shadow-sm",
+              []
+            );
+            const left = createEl("div", "space-y-1", [
+              createEl("p", "text-xs font-semibold text-gray-900", [
+                a.title || "Assignment",
+              ]),
+              createEl("p", "text-[11px] text-gray-500", [
+                `${a.questionCount || 10} Q • ${
+                  a.timeLimitMinutes ? a.timeLimitMinutes + " min" : "No limit"
+                }`,
+              ]),
+              createEl("p", "text-[11px] text-gray-500", [
+                "Due: " + dueLabel,
+              ]),
+              createEl("p", "text-[11px] text-gray-500", [
+                "Last score: " + scoreLabel,
+              ]),
+            ]);
+
+            const statusPill = createEl(
+              "span",
+              "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium " +
+                (status === "Active"
+                  ? "bg-green-50 text-green-700 border border-green-200"
+                  : "bg-red-50 text-red-700 border border-red-200"),
+              [status]
+            );
+            left.appendChild(statusPill);
+
+            const right = createEl("div", "flex gap-2 items-center", []);
+            const startBtn = createEl(
+              "button",
+              "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+              [lastSub ? "Start / Retake" : "Start"]
+            );
+            startBtn.addEventListener("click", async () => {
+              let questions = [];
+              try {
+                if (a.type === "custom" && Array.isArray(a.customQuestionIds)) {
+                  questions = await QuestionService.getByIds(
+                    a.customQuestionIds
+                  );
+                } else if (a.type === "unit" && Array.isArray(a.units)) {
+                  const unit = a.units[0];
+                  questions = await QuestionService.getQuestions({ unit });
+                } else if (
+                  (a.type === "cumulative" || a.type === "mixed") &&
+                  Array.isArray(a.units) &&
+                  a.units.length
+                ) {
+                  let pool = [];
+                  for (const u of a.units) {
+                    const qs = await QuestionService.getQuestions({ unit: u });
+                    pool = pool.concat(qs);
+                  }
+                  const unique = Array.from(
+                    new Map(pool.map((q) => [q.id, q])).values()
+                  );
+                  questions = unique;
+                } else {
+                  questions = await QuestionService.getQuestions();
+                }
+              } catch (e) {
+                console.error("Assignment question load error", e);
+                Toast.show(
+                  "No questions available for this assignment.",
+                  "error"
+                );
+                return;
+              }
+
+              if (!questions.length) {
+                Toast.show(
+                  "No questions available for this assignment.",
+                  "error"
+                );
+                return;
+              }
+
+              if (a.randomizeQuestions !== false) {
+                questions = [...questions].sort(() => Math.random() - 0.5);
+              }
+              if (a.questionCount && questions.length > a.questionCount) {
+                questions = questions.slice(0, a.questionCount);
+              }
+
+              startQuizSession({
+                mode: "assignment",
+                assignment: a,
+                questions,
+              });
+            });
+            right.appendChild(startBtn);
+
+            if (lastSub) {
+              const reviewBtn = createEl(
+                "button",
+                "px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+                ["Review"]
+              );
+              reviewBtn.addEventListener("click", () => {
+                renderSubmissionReview(lastSub);
+              });
+              right.appendChild(reviewBtn);
+            }
+
+            card.appendChild(left);
+            card.appendChild(right);
+            list.appendChild(card);
+          });
+          wrapper.appendChild(list);
+        }
+
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      async function renderStudentAnalytics() {
+        const content = $("tab-content");
+        content.innerHTML =
+          "<p class='text-[11px] text-gray-500'>Loading analytics…</p>";
+        const userId = AppState.user.uid;
+
+        let submissions = [];
+        let srStats = { totalCards: 0, dueNow: 0, dueSoon: 0, mastered: 0 };
+        try {
+          const [subs, sr] = await Promise.all([
+            DataManager.listSubmissionsForStudent(userId),
+            SpacedRepetition.getStats(userId),
+          ]);
+          submissions = subs || [];
+          srStats = sr || srStats;
+        } catch (e) {
+          console.error("Student analytics error", e);
+          Toast.show(
+            "Analytics could not fully load (check Firestore rules).",
+            "error"
+          );
+        }
+
+        const overview = AnalyticsService.computeStudentOverview(submissions);
+        const unitSummary = AnalyticsService.summarizeUnits(
+          overview.unitStats
+        );
+        const stats = overview.stats;
+        const answered = stats.answered || 0;
+        const correct = stats.correct || 0;
+        const pct =
+          answered > 0 ? Math.round((correct / answered) * 100) : "—";
+        const ap = overview.apPrediction || "—";
+
+        const wrapper = createEl("div", "space-y-4", []);
+        wrapper.appendChild(
+          createEl("div", "flex items-center justify-between", [
+            createEl("div", "", [
+              createEl("h1", "text-sm font-semibold text-gray-900", [
+                "Analytics & Insights",
+              ]),
+              createEl("p", "text-[11px] text-gray-600", [
+                "See how you’re doing by unit and overall.",
+              ]),
+            ]),
+          ])
+        );
+
+        const topRow = createEl(
+          "div",
+          "grid grid-cols-1 md:grid-cols-4 gap-3",
+          [
+            statCard(
+              "Overall accuracy",
+              pct === "—" ? "—" : pct + "%"
+            ),
+            statCard("AP score prediction", "≈ " + ap),
+            statCard("Questions answered", answered),
+            statCard("SR cards due now", srStats.dueNow || 0),
+          ]
+        );
+        wrapper.appendChild(topRow);
+
+        const unitCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
+          []
+        );
+        unitCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
+            "By-unit accuracy",
+          ])
+        );
+        if (!unitSummary.length) {
+          unitCard.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "Once you’ve done more practice, you’ll see which units are strongest and weakest.",
+            ])
+          );
+        } else {
+          unitSummary.forEach((u) => {
+            unitCard.appendChild(
+              unitBar(
+                u.unit,
+                u.accuracy,
+                u.total,
+                u.accuracy >= 0.7 ? "bg-green-600" : "bg-amber-500"
+              )
+            );
+          });
+        }
+        wrapper.appendChild(unitCard);
+
+        const srCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
+          []
+        );
+        srCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
+            "Spaced repetition",
+          ])
+        );
+        srCard.appendChild(
+          createEl("p", "text-[11px] text-gray-600", [
+            `Total cards: ${srStats.totalCards || 0} · Due now: ${
+              srStats.dueNow || 0
+            } · Due soon: ${srStats.dueSoon || 0} · Mastered: ${
+              srStats.mastered || 0
+            }`,
+          ])
+        );
+        wrapper.appendChild(srCard);
+
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      // ---------------- Practice Panel ----------------
+      function renderPracticePanel() {
+        const wrapper = createEl("div", "space-y-4", []);
+        if (!AppState.user) {
+          wrapper.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "Please sign in to start practice.",
+            ])
+          );
+          return wrapper;
+        }
+
+        wrapper.appendChild(
+          createEl("div", "flex items-center justify-between", [
+            createEl("div", "", [
+              createEl("h2", "text-sm font-semibold text-gray-900", [
+                "Practice modes",
+              ]),
+              createEl("p", "text-[11px] text-gray-600", [
+                "Mix targeted unit work, smart practice, spaced repetition, and timed drills.",
+              ]),
+            ]),
+          ])
+        );
+
+        const grid = createEl(
+          "div",
+          "grid grid-cols-1 md:grid-cols-2 gap-3",
+          []
+        );
+
+        // Unit practice
+        (function () {
+          const card = createEl(
+            "div",
+            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+            []
+          );
+          card.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", [
+              "Unit practice",
+            ])
+          );
+          card.appendChild(
+            createEl("p", "text-[11px] text-gray-600", [
+              "Pick a single AP Psychology unit and run a focused practice set.",
+            ])
+          );
+
+          const row1 = createEl(
+            "div",
+            "flex items-center gap-2 text-[11px]",
+            []
+          );
+          const unitSelect = createEl(
+            "select",
+            "flex-1 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          AP_UNITS.forEach((label, idx) => {
+            const opt = document.createElement("option");
+            opt.value = String(idx + 1);
+            opt.textContent = `Unit ${idx + 1}`;
+            unitSelect.appendChild(opt);
+          });
+          const countInput = createEl(
+            "input",
+            "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          countInput.type = "number";
+          countInput.min = "5";
+          countInput.max = "50";
+          countInput.value = "10";
+          row1.appendChild(unitSelect);
+          row1.appendChild(countInput);
+          card.appendChild(row1);
+
+          const btn = createEl(
+            "button",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Start unit practice"]
+          );
+          btn.addEventListener("click", () => {
+            const unit = Number(unitSelect.value || 1);
+            const limit = Number(countInput.value || 10);
+            startPractice({ mode: "unit", unit, limit });
+          });
+          card.appendChild(btn);
+          grid.appendChild(card);
+        })();
+
+        // Smart mixed practice
+        (function () {
+          const card = createEl(
+            "div",
+            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+            []
+          );
+          card.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", [
+              "Smart mixed practice",
+            ])
+          );
+          card.appendChild(
+            createEl("p", "text-[11px] text-gray-600", [
+              "Blends spaced repetition cards with your weakest units.",
+            ])
+          );
+
+          const countInput = createEl(
+            "input",
+            "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-[11px]",
+            []
+          );
+          countInput.type = "number";
+          countInput.min = "5";
+          countInput.max = "30";
+          countInput.value = "10";
+
+          const row = createEl(
+            "div",
+            "flex items-center gap-2 text-[11px]",
+            []
+          );
+          row.appendChild(
+            createEl("span", "text-[11px] text-gray-600", ["Questions:"])
+          );
+          row.appendChild(countInput);
+          card.appendChild(row);
+
+          const btn = createEl(
+            "button",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Start smart set"]
+          );
+          btn.addEventListener("click", () => {
+            const limit = Number(countInput.value || 10);
+            startPractice({ mode: "smart", limit });
+          });
+          card.appendChild(btn);
+
+          grid.appendChild(card);
+        })();
+
+        // Spaced repetition
+        (function () {
+          const card = createEl(
+            "div",
+            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+            []
+          );
+          card.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", [
+              "Spaced repetition",
+            ])
+          );
+          const subtitle = createEl(
+            "p",
+            "text-[11px] text-gray-600",
+            ["SR keeps concepts fresh with short daily reviews."]
+          );
+          card.appendChild(subtitle);
+
+          const statsLine = createEl(
+            "p",
+            "text-[11px] text-gray-600",
+            ["Loading SR stats..."]
+          );
+          card.appendChild(statsLine);
+
+          SpacedRepetition.getStats(AppState.user.uid)
+            .then((stats) => {
+              statsLine.textContent = `Total cards: ${
+                stats.totalCards || 0
+              } · Due now: ${stats.dueNow || 0} · Due soon: ${
+                stats.dueSoon || 0
+              } · Mastered: ${stats.mastered || 0}`;
+            })
+            .catch((e) => {
+              console.error("SR stats error", e);
+              statsLine.textContent =
+                "Unable to load SR stats right now. You can still review.";
+            });
+
+          const btn = createEl(
+            "button",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Start SR review"]
+          );
+          btn.addEventListener("click", () => {
+            startPractice({ mode: "sr" });
+          });
+          card.appendChild(btn);
+
+          grid.appendChild(card);
+        })();
+
+        // Timed practice
+        (function () {
+          const card = createEl(
+            "div",
+            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+            []
+          );
+          card.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", [
+              "Timed practice",
+            ])
+          );
+          card.appendChild(
+            createEl("p", "text-[11px] text-gray-600", [
+              "Simulate exam pressure with timed mixed sets.",
+            ])
+          );
+
+          const unitRow = createEl(
+            "div",
+            "flex items-center gap-2 text-[11px]",
+            []
+          );
+          const unitSelect = createEl(
+            "select",
+            "flex-1 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          [
+            { value: "all", label: "All units" },
+            { value: "weak", label: "Weakest units" },
+          ].forEach((optData) => {
+            const opt = document.createElement("option");
+            opt.value = optData.value;
+            opt.textContent = optData.label;
+            unitSelect.appendChild(opt);
+          });
+          AP_UNITS.forEach((label, idx) => {
+            const opt = document.createElement("option");
+            opt.value = String(idx + 1);
+            opt.textContent = `Unit ${idx + 1}`;
+            unitSelect.appendChild(opt);
+          });
+          unitRow.appendChild(
+            createEl("span", "text-[11px] text-gray-600", ["Mode:"])
+          );
+          unitRow.appendChild(unitSelect);
+          card.appendChild(unitRow);
+
+          const countRow = createEl(
+            "div",
+            "flex items-center gap-2 text-[11px] mt-1",
+            []
+          );
+          const countInput = createEl(
+            "input",
+            "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          countInput.type = "number";
+          countInput.min = "5";
+          countInput.max = "50";
+          countInput.value = "20";
+          countRow.appendChild(
+            createEl("span", "text-[11px] text-gray-600", ["Questions:"])
+          );
+          countRow.appendChild(countInput);
+          card.appendChild(countRow);
+
+          const timeRow = createEl(
+            "div",
+            "flex items-center gap-2 text-[11px] mt-1",
+            []
+          );
+          const timeSelect = createEl(
+            "select",
+            "px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          [15, 20, 30, 45, 60].forEach((m) => {
+            const opt = document.createElement("option");
+            opt.value = String(m);
+            opt.textContent = `${m} min`;
+            timeSelect.appendChild(opt);
+          });
+          timeRow.appendChild(
+            createEl("span", "text-[11px] text-gray-600", ["Time:"])
+          );
+          timeRow.appendChild(timeSelect);
+          card.appendChild(timeRow);
+
+          const btn = createEl(
+            "button",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Start timed set"]
+          );
+          btn.addEventListener("click", () => {
+            const unitMode = unitSelect.value || "all";
+            const questionCount = Number(countInput.value || 20);
+            const timeLimitMinutes = Number(timeSelect.value || 20);
+            startTimedPractice({ unitMode, questionCount, timeLimitMinutes });
+          });
+          card.appendChild(btn);
+
+          grid.appendChild(card);
+        })();
+
+        wrapper.appendChild(grid);
+        return wrapper;
+      }
+
+      // ---------------- Teacher Views ----------------
+      async function renderTeacherDashboard() {
+        const content = $("tab-content");
+        content.innerHTML =
+          "<p class='text-[11px] text-gray-500'>Loading teacher dashboard…</p>";
+        const teacherId = AppState.user.uid;
+
+        let classes = [];
+        let assignments = [];
+        let submissions = [];
+        try {
+          const [cls, asg] = await Promise.all([
+            DataManager.listClassesForTeacher(teacherId),
+            DataManager.listAssignmentsForTeacher(teacherId),
+          ]);
+          classes = cls || [];
+          assignments = asg || [];
+          const arrays = [];
+          for (const a of assignments) {
+            try {
+              const subs = await DataManager.listSubmissionsForAssignment(
+                a.id
+              );
+              arrays.push(subs);
+            } catch (e) {
+              console.error("List submissions for assignment error", e);
+            }
+          }
+          submissions = arrays.flat();
+        } catch (e) {
+          console.error("Teacher dashboard error", e);
+          Toast.show(
+            "Some teacher data could not load (check Firestore rules).",
+            "error"
+          );
+        }
+
+        const studentSet = new Set();
+        classes.forEach((c) => {
+          (c.studentIds || []).forEach((id) => studentSet.add(id));
+        });
+
+        const now = Date.now();
+        const activeAssignments = assignments.filter((a) => {
+          if (!a.dueAt) return true;
+          const ts = new Date(a.dueAt).getTime();
+          return isNaN(ts) ? true : ts >= now;
+        }).length;
+
+        const scores = submissions
+          .map((s) =>
+            typeof s.scorePercent === "number" ? s.scorePercent : null
+          )
+          .filter((s) => s != null && !isNaN(s));
+        const avgScore =
+          scores.length > 0
+            ? Math.round(
+                scores.reduce((acc, v) => acc + v, 0) / scores.length
+              )
+            : null;
+
+        const wrapper = createEl("div", "space-y-4", []);
+
+        wrapper.appendChild(
+          createEl("div", "flex items-center justify-between", [
+            createEl("div", "", [
+              createEl("h1", "text-sm font-semibold text-gray-900", [
+                "Class overview",
+              ]),
+              createEl("p", "text-[11px] text-gray-600", [
+                "High-level snapshot of your AP Psychology classes.",
+              ]),
+            ]),
+          ])
+        );
+
+        const topRow = createEl(
+          "div",
+          "grid grid-cols-1 md:grid-cols-4 gap-3",
+          [
+            statCard("Classes", classes.length),
+            statCard("Students", studentSet.size || 0),
+            statCard("Active assignments", activeAssignments),
+            statCard(
+              "Avg score",
+              avgScore == null ? "—" : avgScore + "%"
+            ),
+          ]
+        );
+        wrapper.appendChild(topRow);
+
+        const activityCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
+          []
+        );
+        activityCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
+            "Recent activity",
+          ])
+        );
+
+        const sortedSubs = submissions
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(b.completedAt || 0) - new Date(a.completedAt || 0)
+          )
+          .slice(0, 6);
+
+        if (!sortedSubs.length) {
+          activityCard.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "Once students complete assignments, you’ll see their latest work here.",
+            ])
+          );
+        } else {
+          sortedSubs.forEach((s) => {
+            const a = assignments.find((x) => x.id === s.assignmentId);
+            const row = createEl(
+              "div",
+              "flex items-center justify-between text-[11px] py-1",
+              []
+            );
+            row.appendChild(
+              createEl("div", "", [
+                createEl("p", "text-[11px] text-gray-800", [
+                  a?.title || "Practice session",
+                ]),
+                createEl("p", "text-[10px] text-gray-500", [
+                  formatDateTimeISO(s.completedAt),
+                ]),
+              ])
+            );
+            row.appendChild(
+              createEl("p", "text-[11px] font-medium text-gray-900", [
+                Math.round(s.scorePercent || 0) + "%",
+              ])
+            );
+            activityCard.appendChild(row);
+          });
+        }
+
+        wrapper.appendChild(activityCard);
+
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      async function renderTeacherClasses() {
+        const content = $("tab-content");
+        content.innerHTML =
+          "<p class='text-[11px] text-gray-500'>Loading classes…</p>";
+        const teacherId = AppState.user.uid;
+
+        let classes = [];
+        try {
+          classes = await DataManager.listClassesForTeacher(teacherId);
+        } catch (e) {
+          console.error("Teacher classes error", e);
+          Toast.show(
+            "Unable to load your classes (check Firestore rules).",
+            "error"
+          );
+        }
+
+        const wrapper = createEl("div", "space-y-4", []);
+        wrapper.appendChild(
+          createEl("h2", "text-sm font-semibold text-gray-900", ["Classes"])
+        );
+
+        const createCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+          []
+        );
+        createCard.appendChild(
+          createEl("p", "text-[11px] text-gray-700 font-medium", [
+            "Create a new class",
+          ])
+        );
+        const row = createEl(
+          "div",
+          "flex flex-col sm:flex-row gap-2 items-start sm:items-center",
+          []
+        );
+        const nameInput = createEl(
+          "input",
+          "flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-[11px] bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        nameInput.placeholder = "Class name (e.g., 3rd period AP Psych)";
+        const createBtn = createEl(
+          "button",
+          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          ["Create class"]
+        );
+        createBtn.addEventListener("click", async () => {
+          const name = (nameInput.value || "").trim();
+          if (!name) {
+            Toast.show("Enter a class name first.", "error");
+            return;
+          }
+          try {
+            await DataManager.createClass(
+              name,
+              teacherId,
+              AppState.user.email || ""
+            );
+            Toast.show("Class created!", "success");
+            renderTeacherClasses();
+          } catch (e) {
+            console.error("Create class error", e);
+            Toast.show(e.message || "Error creating class.", "error");
+          }
+        });
+        row.appendChild(nameInput);
+        row.appendChild(createBtn);
+        createCard.appendChild(row);
+        wrapper.appendChild(createCard);
+
+        const listCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+          []
+        );
+        listCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
+            "Your classes",
+          ])
+        );
+
+        if (!classes.length) {
+          listCard.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "You haven’t created any classes yet. Use the form above to get started.",
+            ])
+          );
+        } else {
+          classes.forEach((c) => {
+            const row = createEl(
+              "div",
+              "flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-[11px]",
+              []
+            );
+            const left = createEl("div", "", [
+              createEl("p", "text-xs font-semibold text-gray-900", [
+                c.name || "Class",
+              ]),
+              createEl("p", "text-[11px] text-gray-500", [
+                `Code: ${c.code || "—"} · Students: ${
+                  (c.studentIds || []).length
+                }`,
+              ]),
+            ]);
+            const right = createEl("div", "flex items-center gap-1", []);
+            const copyBtn = createEl(
+              "button",
+              "px-2 py-1 rounded-lg border border-gray-300 text-[10px] hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+              ["Copy code"]
+            );
+            copyBtn.addEventListener("click", () => {
+              if (c.code && navigator.clipboard) {
+                navigator.clipboard.writeText(c.code);
+                Toast.show("Class code copied.", "success");
+              }
+            });
+            right.appendChild(copyBtn);
+            row.appendChild(left);
+            row.appendChild(right);
+            listCard.appendChild(row);
+          });
+        }
+
+        wrapper.appendChild(listCard);
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      function parseBatchQuestions(raw, teacherId) {
+  const lines = (raw || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+
+  const questions = [];
+
+  lines.forEach((line, idx) => {
+    const parts = line.split("|").map((p) => p.trim());
+    // Minimum 10 fields required
+    if (parts.length < 10) {
+      console.warn("Skipping short line", idx + 1, line);
+      return;
+    }
+
+    const [
+      unitStr,
+      skill,
+      difficultyRaw,
+      question,
+      A,
+      B,
+      C,
+      D,
+      correctRaw,
+      explanation,
+    ] = parts;
+
+    const unitNum = Number(unitStr);
+    if (!unitNum || !question) {
+      console.warn("Skipping invalid unit/question on line", idx + 1);
+      return;
+    }
+
+    const options = [A, B, C, D].map((v) => v || "");
+
+    // Normalize difficulty
+    let difficulty = (difficultyRaw || "").toLowerCase();
+    if (difficulty.startsWith("stand")) difficulty = "standard";
+    else if (difficulty.startsWith("chall")) difficulty = "challenging";
+    else if (difficulty.startsWith("extreme")) difficulty = "extreme";
+    else difficulty = "standard";
+
+    // Correct answer: can be A/B/C/D or 1/2/3/4
+    const cRaw = (correctRaw || "").toString().trim().toUpperCase();
+    let correctIndex = ["A", "B", "C", "D"].indexOf(cRaw);
+    if (correctIndex === -1) {
+      const n = Number(cRaw);
+      if (!isNaN(n) && n >= 1 && n <= 4) {
+        correctIndex = n - 1;
+      }
+    }
+    if (correctIndex < 0 || correctIndex > 3) {
+      console.warn("Skipping row with invalid correct column", idx + 1);
+      return;
+    }
+
+    // Optional per-choice explanations: ExpA, ExpB, ExpC, ExpD
+    const expA = parts[10] || "";
+    const expB = parts[11] || "";
+    const expC = parts[12] || "";
+    const expD = parts[13] || "";
+
+    const distractorNotes = {};
+    if (expA) distractorNotes["A"] = expA;
+    if (expB) distractorNotes["B"] = expB;
+    if (expC) distractorNotes["C"] = expC;
+    if (expD) distractorNotes["D"] = expD;
+
+    questions.push({
+      unit: unitNum,
+      skill: skill || "",
+      difficulty,
+      question,
+      options,
+      correctIndex,
+      // "Magic" explanations:
+      // - explanation = why the correct answer is correct (global)
+      // - distractorNotes = per-choice explanation (A–D)
+      explanation: explanation || "",
+      distractorNotes:
+        Object.keys(distractorNotes).length > 0 ? distractorNotes : null,
+      createdBy: teacherId,
+      source: "batch-upload",
+    });
+  });
+
+  return questions;
+}
+
+
+      async function renderTeacherAssignments() {
+        const content = $("tab-content");
+        content.innerHTML =
+          "<p class='text-[11px] text-gray-500'>Loading assignments…</p>";
+        const teacherId = AppState.user.uid;
+
+        let classes = [];
+        let assignments = [];
+        try {
+          const [cls, asg] = await Promise.all([
+            DataManager.listClassesForTeacher(teacherId),
+            DataManager.listAssignmentsForTeacher(teacherId),
+          ]);
+          classes = cls || [];
+          assignments = asg || [];
+        } catch (e) {
+          console.error("Teacher assignments error", e);
+          Toast.show(
+            "Assignments could not fully load (check Firestore rules).",
+            "error"
+          );
+        }
+
+        const wrapper = createEl("div", "space-y-4", []);
+        wrapper.appendChild(
+          createEl("h2", "text-sm font-semibold text-gray-900", [
+            "Assignments",
+          ])
+        );
+
+        const createCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm",
+          []
+        );
+        createCard.appendChild(
+          createEl("p", "text-[11px] font-semibold text-gray-800", [
+            "Create assignment",
+          ])
+        );
+        createCard.appendChild(
+          createEl("p", "text-[11px] text-gray-600", [
+            "Four assignment types, due dates, time limits, and optional custom question sets.",
+          ])
+        );
+
+        if (!classes.length) {
+          createCard.appendChild(
+            createEl("p", "text-[11px] text-red-600", [
+              "You need at least one class before you can assign work.",
+            ])
+          );
+        }
+
+        const formGrid = createEl(
+          "div",
+          "grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]",
+          []
+        );
+
+        // Class select
+        const classSelect = createEl(
+          "select",
+          "w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        classes.forEach((c) => {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.name || "Class";
+          classSelect.appendChild(opt);
+        });
+        if (!classes.length) classSelect.disabled = true;
+
+        formGrid.appendChild(
+          createEl("div", "space-y-1", [
+            createEl("label", "text-[11px] text-gray-700", ["Class"]),
+            classSelect,
+          ])
+        );
+
+        // Title
+        const titleInput = createEl(
+          "input",
+          "w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        titleInput.placeholder = "Assignment title";
+        formGrid.appendChild(
+          createEl("div", "space-y-1", [
+            createEl("label", "text-[11px] text-gray-700", ["Title"]),
+            titleInput,
+          ])
+        );
+
+        // Type select
+        const typeSelect = createEl(
+          "select",
+          "w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        typeSelect.innerHTML = `
+          <option value="unit">Single unit</option>
+          <option value="all">All units</option>
+          <option value="mixed">Mixed (multi-unit)</option>
+          <option value="cumulative">Cumulative review (multi-unit)</option>
+          <option value="custom">Custom question set</option>
+        `;
+        formGrid.appendChild(
+          createEl("div", "space-y-1", [
+            createEl("label", "text-[11px] text-gray-700", ["Type"]),
+            typeSelect,
+          ])
+        );
+
+        // Question count
+        const countInput = createEl(
+          "input",
+          "w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        countInput.type = "number";
+        countInput.min = "5";
+        countInput.max = "60";
+        countInput.value = "10";
+        formGrid.appendChild(
+          createEl("div", "space-y-1", [
+            createEl("label", "text-[11px] text-gray-700", [
+              "Question count",
+            ]),
+            countInput,
+          ])
+        );
+
+        // Time limit
+        const timeSelect = createEl(
+          "select",
+          "w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        timeSelect.innerHTML = `
+          <option value="15">15 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60">60 minutes</option>
+          <option value="">No time limit</option>
+        `;
+        formGrid.appendChild(
+          createEl("div", "space-y-1", [
+            createEl("label", "text-[11px] text-gray-700", ["Time limit"]),
+            timeSelect,
+          ])
+        );
+
+        // Due datetime
+        const dueInput = createEl(
+          "input",
+          "w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        dueInput.type = "datetime-local";
+        formGrid.appendChild(
+          createEl("div", "space-y-1", [
+            createEl("label", "text-[11px] text-gray-700", ["Due date"]),
+            dueInput,
+          ])
+        );
+
+        // Units selection
+        const unitsWrapper = createEl("div", "space-y-1 md:col-span-2", []);
+        unitsWrapper.appendChild(
+          createEl("label", "text-[11px] text-gray-700", ["Units"])
+        );
+        const unitOptionsEl = createEl(
+          "div",
+          "flex flex-wrap gap-2 text-[11px]",
+          []
+        );
+        unitsWrapper.appendChild(unitOptionsEl);
+        formGrid.appendChild(unitsWrapper);
+
+        const UNITS_META = AP_UNITS.map((label, idx) => ({
+          value: idx + 1,
+          label: `Unit ${idx + 1} – ${label}`,
+        }));
+
+        function renderUnitOptions() {
+          unitOptionsEl.innerHTML = "";
+          const type = typeSelect.value;
+          if (type === "unit") {
+            UNITS_META.forEach((u) => {
+              const label = createEl(
+                "label",
+                "inline-flex items-center gap-1",
+                []
+              );
+              const input = document.createElement("input");
+              input.type = "radio";
+              input.name = "unit-radio";
+              input.value = String(u.value);
+              input.className = "h-3 w-3 text-blue-600";
+              label.appendChild(input);
+              label.appendChild(
+                createEl("span", "text-[11px] text-gray-700", [u.label])
+              );
+              unitOptionsEl.appendChild(label);
+            });
+          } else if (type === "mixed" || type === "cumulative") {
+            UNITS_META.forEach((u) => {
+              const label = createEl(
+                "label",
+                "inline-flex items-center gap-1",
+                []
+              );
+              const input = document.createElement("input");
+              input.type = "checkbox";
+              input.value = String(u.value);
+              input.className = "h-3 w-3 text-blue-600";
+              label.appendChild(input);
+              label.appendChild(
+                createEl("span", "text-[11px] text-gray-700", [u.label])
+              );
+              unitOptionsEl.appendChild(label);
+            });
+          } else if (type === "all") {
+            unitOptionsEl.appendChild(
+              createEl("p", "text-[11px] text-gray-500", [
+                "All units (1–9) will be included.",
+              ])
+            );
+          } else if (type === "custom") {
+            unitOptionsEl.appendChild(
+              createEl("p", "text-[11px] text-gray-500", [
+                "Units will be inferred from your custom question set.",
+              ])
+            );
+          }
+        }
+
+        typeSelect.addEventListener("change", renderUnitOptions);
+        renderUnitOptions();
+
+        createCard.appendChild(formGrid);
+
+        // Settings toggles
+        const settingsRow = createEl(
+          "div",
+          "flex flex-wrap gap-3 mt-1 text-[11px]",
+          []
+        );
+        const multipleAttemptsInput = document.createElement("input");
+        multipleAttemptsInput.type = "checkbox";
+        const showAnswersInput = document.createElement("input");
+        showAnswersInput.type = "checkbox";
+        const randomizeInput = document.createElement("input");
+        randomizeInput.type = "checkbox";
+        randomizeInput.checked = true;
+
+        const mkToggle = (input, label) => {
+          const wrap = createEl(
+            "label",
+            "inline-flex items-center gap-1 cursor-pointer",
+            []
+          );
+          input.className = "h-3 w-3 text-blue-600";
+          wrap.appendChild(input);
+          wrap.appendChild(
+            createEl("span", "text-[11px] text-gray-700", [label])
+          );
+          return wrap;
+        };
+
+        settingsRow.appendChild(
+          mkToggle(multipleAttemptsInput, "Allow multiple attempts")
+        );
+        settingsRow.appendChild(
+          mkToggle(showAnswersInput, "Show answers on submit")
+        );
+        settingsRow.appendChild(
+          mkToggle(randomizeInput, "Randomize question order")
+        );
+        createCard.appendChild(settingsRow);
+
+        // Custom question picker
+        let currentCustomQuestionIds = [];
+        let customLabel = createEl(
+          "span",
+          "text-[11px] text-gray-500",
+          ["No questions selected yet."]
+        );
+
+        const pickerRow = createEl(
+          "div",
+          "mt-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2",
+          []
+        );
+        pickerRow.appendChild(
+          createEl("div", "text-[11px] text-gray-600", [
+            "Custom question set (for type “Custom”)",
+          ])
+        );
+        const pickerControls = createEl("div", "flex items-center gap-2", []);
+        const pickerBtn = createEl(
+          "button",
+          "px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          ["Pick questions"]
+        );
+        pickerControls.appendChild(pickerBtn);
+        pickerControls.appendChild(customLabel);
+        pickerRow.appendChild(pickerControls);
+        createCard.appendChild(pickerRow);
+
+        function updateCustomLabel() {
+          if (!currentCustomQuestionIds.length) {
+            customLabel.textContent = "No questions selected yet.";
+          } else {
+            customLabel.textContent = `${currentCustomQuestionIds.length} question${
+              currentCustomQuestionIds.length === 1 ? "" : "s"
+            } selected.`;
+          }
+        }
+
+        function openQuestionPicker() {
+          const overlay = createEl(
+            "div",
+            "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            []
+          );
+          const panel = createEl(
+            "div",
+            "bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-gray-200",
+            []
+          );
+
+          const header = createEl(
+            "div",
+            "flex items-center justify-between px-4 py-3 border-b border-gray-200",
+            []
+          );
+          header.appendChild(
+            createEl("h3", "text-xs font-semibold text-gray-900", [
+              "Pick questions",
+            ])
+          );
+          const closeBtn = createEl(
+            "button",
+            "text-[11px] text-gray-500 hover:text-gray-900 focus:outline-none",
+            ["Close"]
+          );
+          closeBtn.addEventListener("click", () => {
+            document.body.removeChild(overlay);
+          });
+          header.appendChild(closeBtn);
+          panel.appendChild(header);
+
+          const body = createEl(
+            "div",
+            "flex-1 overflow-auto px-4 py-3 space-y-2 text-[11px]",
+            []
+          );
+          body.appendChild(
+            createEl("p", "text-[11px] text-gray-500 mb-1", [
+              "Select any questions you want in this custom assignment.",
+            ])
+          );
+          const list = createEl("div", "space-y-1", []);
+          body.appendChild(list);
+          panel.appendChild(body);
+
+          const footer = createEl(
+            "div",
+            "px-4 py-3 border-t border-gray-200 flex items-center justify-between text-[11px]",
+            []
+          );
+          const summary = createEl(
+            "span",
+            "text-[11px] text-gray-600",
+            ["Loading questions..."]
+          );
+          const doneBtn = createEl(
+            "button",
+            "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Done"]
+          );
+          doneBtn.addEventListener("click", () => {
+            updateCustomLabel();
+            document.body.removeChild(overlay);
+          });
+          const clearBtn = createEl(
+            "button",
+            "px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Clear"]
+          );
+          clearBtn.addEventListener("click", () => {
+            currentCustomQuestionIds = [];
+            Array.from(
+              list.querySelectorAll("input[type='checkbox']")
+            ).forEach((cb) => {
+              cb.checked = false;
+            });
+            summary.textContent = "0 questions selected.";
+          });
+          footer.appendChild(summary);
+          const right = createEl("div", "flex items-center gap-2", []);
+          right.appendChild(clearBtn);
+          right.appendChild(doneBtn);
+          footer.appendChild(right);
+          panel.appendChild(footer);
+
+          overlay.appendChild(panel);
+          document.body.appendChild(overlay);
+
+          QuestionService.getQuestions()
+            .then((qs) => {
+              if (!qs.length) {
+                summary.textContent =
+                  "No questions available yet. Add questions to the bank first.";
+                return;
+              }
+              summary.textContent = `${
+                currentCustomQuestionIds.length
+              } question${
+                currentCustomQuestionIds.length === 1 ? "" : "s"
+              } selected.`;
+              qs.forEach((q) => {
+                const row = createEl(
+                  "label",
+                  "flex items-start gap-2 border border-gray-200 rounded-lg px-2 py-1",
+                  []
+                );
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.className = "mt-1 h-3 w-3 text-blue-600";
+                cb.value = q.id;
+                cb.checked = currentCustomQuestionIds.includes(q.id);
+                cb.addEventListener("change", () => {
+                  if (cb.checked) {
+                    if (!currentCustomQuestionIds.includes(q.id)) {
+                      currentCustomQuestionIds.push(q.id);
+                    }
+                  } else {
+                    currentCustomQuestionIds = currentCustomQuestionIds.filter(
+                      (x) => x !== q.id
+                    );
+                  }
+                  summary.textContent = `${
+                    currentCustomQuestionIds.length
+                  } question${
+                    currentCustomQuestionIds.length === 1 ? "" : "s"
+                  } selected.`;
+                });
+                row.appendChild(cb);
+                const text = createEl("div", "flex-1", [
+                  createEl("p", "text-[11px] text-gray-800", [q.question]),
+                  createEl("p", "text-[10px] text-gray-500 mt-0.5", [
+                    `Unit ${q.unit || "?"}${
+                      q.skill ? " · " + q.skill : ""
+                    }`,
+                  ]),
+                ]);
+                row.appendChild(text);
+                list.appendChild(row);
+              });
+            })
+            .catch((e) => {
+              console.error("Question picker load error", e);
+              summary.textContent =
+                "Unable to load questions right now. Try again later.";
+            });
+        }
+
+        pickerBtn.addEventListener("click", () => {
+          openQuestionPicker();
+        });
+
+        // Create assignment button
+        const createBtn = createEl(
+          "button",
+          "mt-3 inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          ["Create assignment"]
+        );
+        createBtn.addEventListener("click", async () => {
+          if (!classes.length) {
+            Toast.show("Create a class first.", "error");
+            return;
+          }
+          const title = (titleInput.value || "").trim() || "Assignment";
+          const type = typeSelect.value;
+          const questionCountNumber = Number(countInput.value || 10);
+          const timeLimitMinutes =
+            timeSelect.value === ""
+              ? null
+              : Number(timeSelect.value || 0);
+
+          function collectSelectedUnits() {
+            const t = typeSelect.value;
+            if (t === "unit") {
+              const checked = unitOptionsEl.querySelector(
+                "input[name='unit-radio']:checked"
+              );
+              return checked ? [Number(checked.value)] : [];
+            }
+            if (t === "mixed" || t === "cumulative") {
+              return Array.from(
+                unitOptionsEl.querySelectorAll("input[type='checkbox']:checked")
+              ).map((cb) => Number(cb.value));
+            }
+            if (t === "all") {
+              return UNITS_META.map((u) => u.value);
+            }
+            return [];
+          }
+
+          const units = collectSelectedUnits();
+          if (
+            (type === "unit" || type === "mixed" || type === "cumulative") &&
+            !units.length
+          ) {
+            Toast.show("Select at least one unit.", "error");
+            return;
+          }
+          if (type === "custom" && !currentCustomQuestionIds.length) {
+            Toast.show(
+              "Pick at least one question for the custom set.",
+              "error"
+            );
+            return;
+          }
+
+          const dueAt =
+            dueInput.value && dueInput.value.length
+              ? new Date(dueInput.value).toISOString()
+              : null;
+
+          const data = {
+            title,
+            type,
+            teacherId,
+            classId: classSelect.value,
+            units,
+            questionCount:
+              type === "custom"
+                ? currentCustomQuestionIds.length
+                : questionCountNumber,
+            timeLimitMinutes,
+            allowMultipleAttempts: multipleAttemptsInput.checked,
+            showAnswers: showAnswersInput.checked,
+            randomizeQuestions: randomizeInput.checked,
+            dueAt,
+            customQuestionIds: currentCustomQuestionIds.slice(),
+          };
+
+          try {
+            await DataManager.createAssignment(data);
+            Toast.show("Assignment created.", "success");
+            renderTeacherAssignments();
+          } catch (e) {
+            console.error("Create assignment error", e);
+            Toast.show(e.message || "Error creating assignment.", "error");
+          }
+        });
+
+        createCard.appendChild(createBtn);
+        wrapper.appendChild(createCard);
+
+        // Recent assignments
+        const recentCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+          []
+        );
+        recentCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
+            "Recent assignments",
+          ])
+        );
+
+        if (!assignments.length) {
+          recentCard.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "Once you create assignments, you’ll see quick stats here.",
+            ])
+          );
+        } else {
+          const sorted = assignments
+            .slice()
+            .sort((a, b) => {
+              const aCreated =
+                a.createdAt &&
+                typeof a.createdAt.toMillis === "function"
+                  ? a.createdAt.toMillis()
+                  : 0;
+              const bCreated =
+                b.createdAt &&
+                typeof b.createdAt.toMillis === "function"
+                  ? b.createdAt.toMillis()
+                  : 0;
+              return bCreated - aCreated;
+            })
+            .slice(0, 5);
+
+          for (const a of sorted) {
+            let subs = [];
+            try {
+              subs = await DataManager.listSubmissionsForAssignment(a.id);
+            } catch (e) {
+              console.error("Recent assignments submission error", e);
+            }
+            const scores = subs
+              .map((s) =>
+                typeof s.scorePercent === "number" ? s.scorePercent : null
+              )
+              .filter((v) => v != null && !isNaN(v));
+            const avg =
+              scores.length > 0
+                ? Math.round(
+                    scores.reduce((acc, v) => acc + v, 0) / scores.length
+                  )
+                : null;
+            const clazz = classes.find((c) => c.id === a.classId);
+            const totalStudents = (clazz?.studentIds || []).length;
+            const completed = subs.length;
+
+            const now = Date.now();
+            const dueTs = a.dueAt ? new Date(a.dueAt).getTime() : null;
+            const status =
+              dueTs && dueTs < now ? "Overdue" : "Active";
+
+            const card = createEl(
+              "div",
+              "flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-[11px]",
+              []
+            );
+            const left = createEl("div", "", [
+              createEl("p", "text-xs font-semibold text-gray-900", [
+                a.title || "Assignment",
+              ]),
+              createEl("p", "text-[11px] text-gray-500", [
+                `${clazz?.name || "Class"} · ${
+                  a.questionCount || 10
+                } Q · ${
+                  a.timeLimitMinutes ? a.timeLimitMinutes + " min" : "No limit"
+                }`,
+              ]),
+              createEl("p", "text-[10px] text-gray-500", [
+                a.dueAt
+                  ? `Due ${formatDateTimeISO(a.dueAt)} (${status})`
+                  : "No due date",
+              ]),
+            ]);
+            const right = createEl("div", "text-right space-y-0.5", []);
+            right.appendChild(
+              createEl("p", "text-[11px] text-gray-700", [
+                `${completed}/${totalStudents || "?"} completed`,
+              ])
+            );
+            right.appendChild(
+              createEl("p", "text-[11px] font-semibold text-gray-900", [
+                avg == null ? "—" : avg + "% avg",
+              ])
+            );
+            card.appendChild(left);
+            card.appendChild(right);
+            recentCard.appendChild(card);
+          }
+        }
+
+        wrapper.appendChild(recentCard);
+
+        // Batch Question Uploader
+        const batchCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+          []
+        );
+        batchCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
+            "Batch Question Uploader",
+          ])
+        );
+        batchCard.appendChild(
+          createEl("p", "text-[11px] text-gray-600", [
+            "Paste questions using the format:",
+            " Unit | Skill | Difficulty | Question | A | B | C | D | Correct | Explanation",
+          ])
+        );
+        batchCard.appendChild(
+          createEl("p", "text-[11px] text-gray-500", [
+            "Example:",
+            " 1 | Concept Application | Standard | In classical conditioning, the unlearned response is called the: | UR | CR | CS | UCS | A | The unconditioned response (UR) is the automatic, unlearned response.",
+          ])
+        );
+        const textarea = createEl(
+          "textarea",
+          "w-full min-h-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-[11px] font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+          []
+        );
+        textarea.placeholder =
+          "Unit | Skill | Difficulty | Question | A | B | C | D | Correct | Explanation\n1 | Concept Application | Standard | ...";
+        batchCard.appendChild(textarea);
+
+        const batchFooter = createEl(
+          "div",
+          "flex items-center justify-between mt-2 text-[11px]",
+          []
+        );
+        const batchStatus = createEl(
+          "span",
+          "text-[11px] text-gray-500",
+          ["No upload yet."]
+        );
+        const batchBtn = createEl(
+          "button",
+          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          ["Upload questions"]
+        );
+        batchBtn.addEventListener("click", async () => {
+          const raw = textarea.value;
+          const questions = parseBatchQuestions(raw, teacherId);
+          if (!questions.length) {
+            Toast.show(
+              "No valid questions found. Check your formatting.",
+              "error"
+            );
+            batchStatus.textContent =
+              "No valid questions parsed. Check formatting.";
+            return;
+          }
+          try {
+            batchBtn.disabled = true;
+            batchBtn.textContent = "Uploading…";
+            const { created } =
+              await DataManager.batchUploadQuestions(questions);
+            Toast.show(`Uploaded ${created} questions.`, "success");
+            batchStatus.textContent = `Uploaded ${created} questions successfully.`;
+          } catch (e) {
+            console.error("Batch upload error", e);
+            Toast.show(
+              e.message || "Error uploading questions. Check Firestore rules.",
+              "error"
+            );
+            batchStatus.textContent = "Upload failed.";
+          } finally {
+            batchBtn.disabled = false;
+            batchBtn.textContent = "Upload questions";
+          }
+        });
+        batchFooter.appendChild(batchStatus);
+        batchFooter.appendChild(batchBtn);
+        batchCard.appendChild(batchFooter);
+
+        wrapper.appendChild(batchCard);
+
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      async function renderTeacherResults() {
+        const content = $("tab-content");
+        content.innerHTML =
+          "<p class='text-[11px] text-gray-500'>Loading class analytics…</p>";
+        const teacherId = AppState.user.uid;
+
+        let classes = [];
+        let assignments = [];
+        let submissions = [];
+        try {
+          const [cls, asg] = await Promise.all([
+            DataManager.listClassesForTeacher(teacherId),
+            DataManager.listAssignmentsForTeacher(teacherId),
+          ]);
+          classes = cls || [];
+          assignments = asg || [];
+          const arrays = [];
+          for (const a of assignments) {
+            try {
+              const subs = await DataManager.listSubmissionsForAssignment(
+                a.id
+              );
+              arrays.push(subs);
+            } catch (e) {
+              console.error("Result submissions load error", e);
+            }
+          }
+          submissions = arrays.flat();
+        } catch (e) {
+          console.error("Teacher results error", e);
+          Toast.show(
+            "Analytics could not fully load (check Firestore rules).",
+            "error"
+          );
+        }
+
+        const wrapper = createEl("div", "space-y-4", []);
+        wrapper.appendChild(
+          createEl("div", "flex items-center justify-between", [
+            createEl("div", "", [
+              createEl("h1", "text-sm font-semibold text-gray-900", [
+                "Class analytics",
+              ]),
+              createEl("p", "text-[11px] text-gray-600", [
+                "Class-wide summaries, unit difficulty, and question-level insights.",
+              ]),
+            ]),
+          ])
+        );
+
+        if (!assignments.length || !submissions.length) {
+          wrapper.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "Once students complete assignments, you’ll see analytics here.",
+            ])
+          );
+          content.innerHTML = "";
+          content.appendChild(wrapper);
+          return;
+        }
+
+        const studentSet = new Set();
+        classes.forEach((c) => {
+          (c.studentIds || []).forEach((id) => studentSet.add(id));
+        });
+
+        const now = Date.now();
+        const activeAssignments = assignments.filter((a) => {
+          if (!a.dueAt) return true;
+          const ts = new Date(a.dueAt).getTime();
+          return isNaN(ts) ? true : ts >= now;
+        }).length;
+
+        const scores = submissions
+          .map((s) =>
+            typeof s.scorePercent === "number" ? s.scorePercent : null
+          )
+          .filter((s) => s != null && !isNaN(s));
+        const avgScore =
+          scores.length > 0
+            ? Math.round(
+                scores.reduce((acc, v) => acc + v, 0) / scores.length
+              )
+            : null;
+
+        const topRow = createEl(
+          "div",
+          "grid grid-cols-1 md:grid-cols-4 gap-3",
+          [
+            statCard("Classes", classes.length),
+            statCard("Students", studentSet.size || 0),
+            statCard("Active assignments", activeAssignments),
+            statCard(
+              "Average score",
+              avgScore == null ? "—" : avgScore + "%"
+            ),
+          ]
+        );
+        wrapper.appendChild(topRow);
+
+        // Unit difficulty map
+        const perUnitAgg = {};
+        submissions.forEach((s) => {
+          const perUnit = s.perUnit || {};
+          Object.entries(perUnit).forEach(([unit, data]) => {
+            const u = Number(unit);
+            if (!perUnitAgg[u]) perUnitAgg[u] = { answered: 0, correct: 0 };
+            perUnitAgg[u].answered += data.answered || 0;
+            perUnitAgg[u].correct += data.correct || 0;
+          });
+        });
+
+        const unitCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
+          []
+        );
+        unitCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
+            "Unit difficulty heat map",
+          ])
+        );
+        if (!Object.keys(perUnitAgg).length) {
+          unitCard.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "Once students answer more questions, you’ll see which units are hardest here.",
+            ])
+          );
+        } else {
+          const rows = [];
+          for (let u = 1; u <= AP_UNITS.length; u++) {
+            const data = perUnitAgg[u] || { answered: 0, correct: 0 };
+            const acc =
+              data.answered > 0 ? data.correct / data.answered : 0;
+            rows.push({ unit: u, ...data, accuracy: acc });
+          }
+          rows.forEach((row) => {
+            unitCard.appendChild(
+              unitBar(
+                row.unit,
+                row.accuracy,
+                row.answered,
+                row.accuracy >= 0.7
+                  ? "bg-green-600"
+                  : row.accuracy >= 0.5
+                  ? "bg-amber-500"
+                  : "bg-red-600"
+              )
+            );
+          });
+        }
+        wrapper.appendChild(unitCard);
+
+        // Most challenging questions
+        const questionMap = {};
+        submissions.forEach((s) => {
+          (s.questionResults || []).forEach((qr) => {
+            if (!qr || !qr.questionId) return;
+            const id = qr.questionId;
+            if (!questionMap[id]) {
+              questionMap[id] = {
+                questionId: qr.questionId,
+                text: qr.question,
+                unit: qr.unit || null,
+                attempts: 0,
+                correct: 0,
+              };
+            }
+            const entry = questionMap[id];
+            entry.attempts += 1;
+            if (qr.isCorrect) entry.correct += 1;
+          });
+        });
+
+        const hardest = Object.values(questionMap)
+          .filter((q) => q.attempts >= 3)
+          .map((q) => ({
+            ...q,
+            accuracy: q.attempts > 0 ? q.correct / q.attempts : 0,
+          }))
+          .sort((a, b) => a.accuracy - b.accuracy)
+          .slice(0, 5);
+
+        const hardestCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+          []
+        );
+        hardestCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
+            "Most challenging questions",
+          ])
+        );
+        if (!hardest.length) {
+          hardestCard.appendChild(
+            createEl("p", "text-[11px] text-gray-500", [
+              "Once students have seen questions multiple times, the lowest-performing questions will appear here.",
+            ])
+          );
+        } else {
+          hardest.forEach((q) => {
+            const row = createEl(
+              "div",
+              "border border-gray-200 rounded-lg px-3 py-2 text-[11px] space-y-1",
+              []
+            );
+            row.appendChild(
+              createEl("p", "text-[11px] text-gray-800", [
+                q.text.length > 160 ? q.text.slice(0, 157) + "…" : q.text,
+              ])
+            );
+            row.appendChild(
+              createEl("p", "text-[10px] text-gray-500", [
+                `Unit ${q.unit || "?"} · ${q.correct}/${q.attempts} correct · ${Math.round(
+                  (q.accuracy || 0) * 100
+                )}% accuracy`,
+              ])
+            );
+            hardestCard.appendChild(row);
+          });
+        }
+        wrapper.appendChild(hardestCard);
+
+        // Score distribution
+        const distCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+          []
+        );
+        distCard.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
+            "Score distribution",
+          ])
+        );
+        const bins = [
+          { label: "0–49%", min: 0, max: 49 },
+          { label: "50–69%", min: 50, max: 69 },
+          { label: "70–84%", min: 70, max: 84 },
+          { label: "85–100%", min: 85, max: 100 },
+        ];
+        const counts = bins.map(() => 0);
+        scores.forEach((s) => {
+          for (let i = 0; i < bins.length; i++) {
+            const b = bins[i];
+            if (s >= b.min && s <= b.max) {
+              counts[i]++;
+              break;
+            }
+          }
+        });
+        bins.forEach((b, i) => {
+          const count = counts[i];
+          const row = createEl(
+            "div",
+            "flex items-center justify-between text-[11px]",
+            []
+          );
+          const barWrapper = createEl(
+            "div",
+            "flex-1 mx-2 h-2 bg-gray-200 rounded-full overflow-hidden",
+            []
+          );
+          const fill = createEl("div", "h-2 rounded-full bg-blue-600", []);
+          const pct =
+            scores.length > 0 ? (count / scores.length) * 100 : 0;
+          fill.style.width = pct + "%";
+          barWrapper.appendChild(fill);
+          row.appendChild(
+            createEl("span", "w-16 text-[11px] text-gray-600", [b.label])
+          );
+          row.appendChild(barWrapper);
+          row.appendChild(
+            createEl("span", "w-10 text-right text-[11px] text-gray-600", [
+              String(count),
+            ])
+          );
+          distCard.appendChild(row);
+        });
+        wrapper.appendChild(distCard);
+
+        content.innerHTML = "";
+        content.appendChild(wrapper);
+      }
+
+      // ---------------- Tabs + Navigation ----------------
+      function renderTabs() {
+        const strip = $("tab-strip");
+        if (!strip) return;
+        const tabs = TABS_BY_ROLE[AppState.role] || [];
+        if (!tabs.length) {
+          strip.innerHTML = "";
+          return;
+        }
+        if (
+          !AppState.currentTab ||
+          !tabs.find((t) => t.id === AppState.currentTab)
+        ) {
+          AppState.currentTab = tabs[0].id;
+        }
+        strip.innerHTML = "";
+        tabs.forEach((tab) => {
+          const isActive = AppState.currentTab === tab.id;
+          const btn = createEl(
+            "button",
+            "flex-1 px-3 py-1.5 rounded-lg text-[11px] border transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500",
+            [tab.label]
+          );
+          if (isActive) {
+            btn.className =
+              "flex-1 px-3 py-1.5 rounded-lg text-[11px] border tab-active focus:outline-none focus:ring-1 focus:ring-blue-500";
+          } else {
+            btn.className =
+              "flex-1 px-3 py-1.5 rounded-lg text-[11px] border border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500";
+          }
+          btn.addEventListener("click", () => {
+            AppState.currentTab = tab.id;
+            renderTabs();
+            renderCurrentTab();
+          });
+          strip.appendChild(btn);
+        });
+      }
+
+      async function renderCurrentTab() {
+        const content = $("tab-content");
+        if (!content) return;
+
+        if (AppState.role === "student") {
+          if (AppState.currentTab === "dashboard") {
+            await renderStudentDashboard();
+          } else if (AppState.currentTab === "classes") {
+            await renderStudentClasses();
+          } else if (AppState.currentTab === "assignments") {
+            await renderStudentAssignments();
+          } else if (AppState.currentTab === "practice") {
+            content.innerHTML = "";
+            if (AppState.currentQuiz) {
+              renderQuiz();
+            } else {
+              content.appendChild(renderPracticePanel());
+            }
+          } else if (AppState.currentTab === "analytics") {
+            await renderStudentAnalytics();
+          }
+        } else {
+          if (AppState.currentTab === "dashboard") {
+            await renderTeacherDashboard();
+          } else if (AppState.currentTab === "classes") {
+            await renderTeacherClasses();
+          } else if (AppState.currentTab === "assignments") {
+            await renderTeacherAssignments();
+          } else if (AppState.currentTab === "results") {
+            await renderTeacherResults();
+          }
+        }
+      }
+
+      // ---------------- Auth + UI wiring ----------------
+      function showAppView(show) {
+        $("auth-view").classList.toggle("hidden", !!show);
+        $("app-view").classList.toggle("hidden", !show);
+      }
+
+      function updateRoleToggleUI() {
+        const studentBtn = $("role-student");
+        const teacherBtn = $("role-teacher");
+        if (!studentBtn || !teacherBtn) return;
+        if (AppState.role === "teacher") {
+          teacherBtn.className =
+            "flex-1 px-3 py-1.5 rounded-full bg-white shadow-sm text-gray-900 font-medium border border-gray-300";
+          studentBtn.className =
+            "flex-1 px-3 py-1.5 rounded-full text-gray-500 font-medium";
+        } else {
+          studentBtn.className =
+            "flex-1 px-3 py-1.5 rounded-full bg-white shadow-sm text-gray-900 font-medium border border-gray-300";
+          teacherBtn.className =
+            "flex-1 px-3 py-1.5 rounded-full text-gray-500 font-medium";
+        }
+      }
+
+      function updateRolePill() {
+        const pill = $("role-pill");
+        if (!pill) return;
+        const spans = pill.querySelectorAll("span");
+        if (spans[1]) {
+          spans[1].textContent =
+            AppState.role === "teacher" ? "Teacher" : "Student";
+        }
+      }
+
+      // Role toggles
+      $("role-student").addEventListener("click", () => {
+        AppState.role = "student";
+        updateRoleToggleUI();
+      });
+      $("role-teacher").addEventListener("click", () => {
+        AppState.role = "teacher";
+        updateRoleToggleUI();
+      });
+      updateRoleToggleUI();
+
+      // Auth form
+      $("auth-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = $("auth-email").value.trim();
+        const password = $("auth-password").value;
+        const mode = document.querySelector(
+          "input[name='auth-mode']:checked"
+        ).value;
+        const errEl = $("auth-error");
+        errEl.classList.add("hidden");
+        errEl.textContent = "";
+
+        try {
+          let cred;
+          if (mode === "signup") {
+            cred = await auth.createUserWithEmailAndPassword(email, password);
+            await DataManager.upsertUserProfile(cred.user.uid, {
+              email,
+              role: AppState.role,
+            });
+          } else {
+            cred = await auth.signInWithEmailAndPassword(email, password);
+            // do not overwrite stored role on login
+          }
+        } catch (err) {
+          console.error("Auth error", err);
+          errEl.textContent =
+            err.message || "Authentication error. Check Firebase config.";
+          errEl.classList.remove("hidden");
+        }
+      });
+
+      // Demo accounts (anonymous)
+      $("demo-student").addEventListener("click", async () => {
+        try {
+          AppState.role = "student";
+          updateRoleToggleUI();
+          const cred = await auth.signInAnonymously();
+          await DataManager.upsertUserProfile(cred.user.uid, {
+            email: "demo-student@demo.local",
+            role: "student",
+            isDemo: true,
+          });
+        } catch (e) {
+          console.error("Demo student error", e);
+          Toast.show(
+            e.message || "Demo sign-in failed. Check anonymous auth settings.",
+            "error"
+          );
+        }
+      });
+
+      $("demo-teacher").addEventListener("click", async () => {
+        try {
+          AppState.role = "teacher";
+          updateRoleToggleUI();
+          const cred = await auth.signInAnonymously();
+          await DataManager.upsertUserProfile(cred.user.uid, {
+            email: "demo-teacher@demo.local",
+            role: "teacher",
+            isDemo: true,
+          });
+        } catch (e) {
+          console.error("Demo teacher error", e);
+          Toast.show(
+            e.message || "Demo sign-in failed. Check anonymous auth settings.",
+            "error"
+          );
+        }
+      });
+
+      $("logout-btn").addEventListener("click", () => {
+        auth.signOut();
+      });
+
+      // Auth state observer
+      auth.onAuthStateChanged(async (user) => {
+        if (!user) {
+          AppState.user = null;
+          AppState.currentQuiz = null;
+          showAppView(false);
+          return;
+        }
+        AppState.user = user;
+        let profile = null;
+        try {
+          profile = await DataManager.getUserProfile(user.uid);
+          if (!profile) {
+            profile = {
+              email: user.email || "",
+              role: AppState.role || "student",
+            };
+            await DataManager.upsertUserProfile(user.uid, profile);
+          }
+        } catch (e) {
+          console.error("Error loading profile", e);
+        }
+        AppState.role =
+          profile && profile.role === "teacher" ? "teacher" : "student";
+        updateRolePill();
+
+        const subtitle = $("user-subtitle");
+        if (subtitle) {
+          subtitle.textContent = `${
+            user.email || (profile?.isDemo ? "Demo account" : "No email")
+          } · ${AppState.role === "teacher" ? "Teacher" : "Student"} mode`;
+        }
+
+        showAppView(true);
+        renderTabs();
+        renderCurrentTab();
+      });
+
+      // Initial state
+      showAppView(false);
+    </script>
+  </body>
+</html>
+
