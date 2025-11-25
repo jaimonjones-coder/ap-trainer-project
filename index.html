@@ -291,6 +291,37 @@
     </div>
   </div>
 </div>
+    <!-- Question Library Modal -->
+<div
+  id="question-library-overlay"
+  class="fixed inset-0 bg-black/40 z-40 hidden items-center justify-center"
+>
+  <div
+    id="question-library-modal"
+    class="bg-white rounded-xl shadow-lg max-w-3xl w-full mx-3 max-h-[90vh] overflow-hidden flex flex-col"
+  >
+    <div
+      class="flex items-center justify-between px-4 py-2 border-b border-gray-200"
+    >
+      <h2 class="text-sm font-semibold text-gray-900">
+        Question library
+      </h2>
+      <button
+        id="question-library-close"
+        class="text-gray-400 hover:text-gray-600 text-lg leading-none px-2"
+        type="button"
+      >
+        ×
+      </button>
+    </div>
+    <div
+      id="question-library-body"
+      class="p-3 space-y-2 text-[11px] overflow-y-auto"
+    >
+      <!-- Filled by JS -->
+    </div>
+  </div>
+</div>
     <script>
       // ---------------- Firebase init ----------------
       const firebaseConfig = {
@@ -617,7 +648,20 @@ await doc.ref.update({ studentIds, students });
           if (!qs.length) return QuestionService.seedQuestions(filter.unit);
           return qs;
         },
+     async updateQuestion(id, updates) {
+       if (!id || !updates) return;
+       const ref = db.collection("questions").doc(id);
+       await ref.update({
+         ...updates,
+         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+       });
+     },
 
+     async deleteQuestion(id) {
+       if (!id) return;
+       const ref = db.collection("questions").doc(id);
+       await ref.delete();
+     },
         async batchUploadQuestions(questions) {
           if (!questions.length) return { created: 0 };
           // Firestore batch limit is 500
@@ -991,6 +1035,215 @@ async function openStudentProgressModal(studentId, label) {
     );
   }
 }
+let questionLibraryInitialized = false;
+const QuestionLibraryState = {
+  questions: [],
+};
+
+function ensureQuestionLibraryEvents() {
+  const overlay = $("question-library-overlay");
+  const closeBtn = $("question-library-close");
+  if (!overlay || !closeBtn || questionLibraryInitialized) return;
+  questionLibraryInitialized = true;
+
+  closeBtn.addEventListener("click", closeQuestionLibrary);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      closeQuestionLibrary();
+    }
+  });
+}
+
+function closeQuestionLibrary() {
+  const overlay = $("question-library-overlay");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
+  overlay.classList.remove("flex");
+}
+
+async function openQuestionLibrary() {
+  const overlay = $("question-library-overlay");
+  const body = $("question-library-body");
+  if (!overlay || !body) return;
+
+  ensureQuestionLibraryEvents();
+
+  overlay.classList.remove("hidden");
+  overlay.classList.add("flex");
+  body.innerHTML =
+    "<p class='text-[11px] text-gray-500'>Loading questions…</p>";
+
+  try {
+    const qs = await DataManager.getQuestions({});
+    QuestionLibraryState.questions = qs || [];
+
+    if (!qs || !qs.length) {
+      body.innerHTML = "";
+      body.appendChild(
+        createEl("p", "text-[11px] text-gray-500", [
+          "No questions found yet. Use the batch uploader or add questions to see them here.",
+        ])
+      );
+      return;
+    }
+
+    // Sort questions by unit, then text
+    qs.sort((a, b) => {
+      const ua = typeof a.unit === "number" ? a.unit : 0;
+      const ub = typeof b.unit === "number" ? b.unit : 0;
+      if (ua !== ub) return ua - ub;
+      const qa = (a.question || "").toLowerCase();
+      const qb = (b.question || "").toLowerCase();
+      if (qa < qb) return -1;
+      if (qa > qb) return 1;
+      return 0;
+    });
+
+    const wrapper = createEl("div", "space-y-2", []);
+
+    wrapper.appendChild(
+      createEl("p", "text-[11px] text-gray-600", [
+        `Showing ${qs.length} question${qs.length === 1 ? "" : "s"}. Click Edit or Delete to manage your bank.`,
+      ])
+    );
+
+    const list = createEl(
+      "div",
+      "divide-y divide-gray-100 border border-gray-100 rounded-lg bg-white",
+      []
+    );
+
+    qs.forEach((q) => {
+      const row = createEl(
+        "div",
+        "px-3 py-2 flex flex-col gap-1 md:flex-row md:items-start md:justify-between",
+        []
+      );
+
+      const unitLabel =
+        q.unit != null ? `Unit ${q.unit}` : "Unit ?";
+      const skillLabel = q.skill ? ` · ${q.skill}` : "";
+      const diffLabel = q.difficulty ? ` · ${q.difficulty}` : "";
+
+      const titleText =
+        q.question && q.question.length > 160
+          ? q.question.slice(0, 157) + "…"
+          : q.question || "(no text)";
+
+      const left = createEl("div", "", [
+        createEl("p", "text-[11px] font-medium text-gray-900", [
+          titleText,
+        ]),
+        createEl("p", "text-[10px] text-gray-500", [
+          unitLabel + skillLabel + diffLabel,
+        ]),
+      ]);
+
+      const btnRow = createEl(
+        "div",
+        "flex items-center gap-1 mt-1 md:mt-0",
+        []
+      );
+
+      const editBtn = createEl(
+        "button",
+        "px-2 py-1 text-[10px] border border-gray-300 rounded-lg hover:bg-gray-50",
+        ["Edit text"]
+      );
+      const explainBtn = createEl(
+        "button",
+        "px-2 py-1 text-[10px] border border-gray-300 rounded-lg hover:bg-gray-50",
+        ["Edit explanation"]
+      );
+      const deleteBtn = createEl(
+        "button",
+        "px-2 py-1 text-[10px] border border-red-300 text-red-700 rounded-lg hover:bg-red-50",
+        ["Delete"]
+      );
+
+      btnRow.appendChild(editBtn);
+      btnRow.appendChild(explainBtn);
+      btnRow.appendChild(deleteBtn);
+
+      editBtn.addEventListener("click", async () => {
+        const current = q.question || "";
+        const updated = window.prompt(
+          "Edit question text:",
+          current
+        );
+        if (updated == null || updated === current) return;
+        try {
+          await DataManager.updateQuestion(q.id, {
+            question: updated,
+          });
+          q.question = updated;
+          const newTitle =
+            updated.length > 160
+              ? updated.slice(0, 157) + "…"
+              : updated;
+          left.querySelector(
+            ".text-[11px].font-medium.text-gray-900"
+          ).textContent = newTitle;
+          Toast.show("Question updated.", "success");
+        } catch (err) {
+          console.error("Update question error", err);
+          Toast.show("Could not update question.", "error");
+        }
+      });
+
+      explainBtn.addEventListener("click", async () => {
+        const current = q.explanation || "";
+        const updated = window.prompt(
+          "Edit explanation:",
+          current
+        );
+        if (updated == null || updated === current) return;
+        try {
+          await DataManager.updateQuestion(q.id, {
+            explanation: updated,
+          });
+          q.explanation = updated;
+          Toast.show("Explanation updated.", "success");
+        } catch (err) {
+          console.error("Update explanation error", err);
+          Toast.show("Could not update explanation.", "error");
+        }
+      });
+
+      deleteBtn.addEventListener("click", async () => {
+        const ok = window.confirm(
+          "Delete this question from your bank?"
+        );
+        if (!ok) return;
+        try {
+          await DataManager.deleteQuestion(q.id);
+          list.removeChild(row);
+          Toast.show("Question deleted.", "success");
+        } catch (err) {
+          console.error("Delete question error", err);
+          Toast.show("Could not delete question.", "error");
+        }
+      });
+
+      row.appendChild(left);
+      row.appendChild(btnRow);
+      list.appendChild(row);
+    });
+
+    wrapper.appendChild(list);
+    body.innerHTML = "";
+    body.appendChild(wrapper);
+  } catch (err) {
+    console.error("Question library error", err);
+    body.innerHTML = "";
+    body.appendChild(
+      createEl("p", "text-[11px] text-red-600", [
+        "Unable to load question library. Please try again later.",
+      ])
+    );
+  }
+}
+
       // ---------------- Spaced Repetition ----------------
       const SpacedRepetition = {
         calculate(previous, quality) {
@@ -3795,7 +4048,35 @@ const now = Date.now();
             ),
           ]
         );
-        wrapper.appendChild(topRow);
+        wrapper.appendChild(topRow);const questionLibCard = createEl(
+  "div",
+  "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+  []
+);
+const headerRow = createEl(
+  "div",
+  "flex items-center justify-between",
+  []
+);
+headerRow.appendChild(
+  createEl("h3", "text-xs font-semibold text-gray-800", [
+    "Question library",
+  ])
+);
+const openLibBtn = createEl(
+  "button",
+  "px-2 py-1 text-[11px] border border-gray-300 rounded-lg hover:bg-gray-50",
+  ["Open"]
+);
+headerRow.appendChild(openLibBtn);
+questionLibCard.appendChild(headerRow);
+questionLibCard.appendChild(
+  createEl("p", "text-[11px] text-gray-600", [
+    "Browse, edit, or delete questions in your bank.",
+  ])
+);
+openLibBtn.addEventListener("click", () => openQuestionLibrary());
+wrapper.appendChild(questionLibCard);
 const studentCard = createEl(
   "div",
   "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
