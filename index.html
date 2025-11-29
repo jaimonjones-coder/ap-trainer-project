@@ -1148,162 +1148,300 @@ async function openQuestionLibrary() {
       return;
     }
 
-    // Sort questions by unit, then text
-    qs.sort((a, b) => {
-      const ua = typeof a.unit === "number" ? a.unit : 0;
-      const ub = typeof b.unit === "number" ? b.unit : 0;
-      if (ua !== ub) return ua - ub;
-      const qa = (a.question || "").toLowerCase();
-      const qb = (b.question || "").toLowerCase();
-      if (qa < qb) return -1;
-      if (qa > qb) return 1;
-      return 0;
+    const allQuestions = QuestionLibraryState.questions.slice();
+
+    // Build filter options from existing questions
+    const unitValues = Array.from(
+      new Set(
+        allQuestions
+          .map((q) =>
+            typeof q.unit === "number" ? q.unit : null
+          )
+          .filter((v) => v != null)
+      )
+    ).sort((a, b) => a - b);
+
+    const skillValues = Array.from(
+      new Set(
+        allQuestions
+          .map((q) => (q.skill || "").trim())
+          .filter((v) => v)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    const diffValues = Array.from(
+      new Set(
+        allQuestions
+          .map((q) => (q.difficulty || "").trim())
+          .filter((v) => v)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    body.innerHTML = "";
+    const wrapper = createEl("div", "space-y-3", []);
+
+    // Filter row
+    const filterRow = createEl(
+      "div",
+      "flex flex-wrap gap-2 items-center text-xs md:text-sm",
+      []
+    );
+
+    // Unit select
+    const unitLabelEl = createEl("span", "text-gray-600", ["Unit"]);
+    const unitSelect = document.createElement("select");
+    unitSelect.className =
+      "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
+    const unitAllOpt = document.createElement("option");
+    unitAllOpt.value = "";
+    unitAllOpt.textContent = "All units";
+    unitSelect.appendChild(unitAllOpt);
+    unitValues.forEach((u) => {
+      const opt = document.createElement("option");
+      opt.value = String(u);
+      opt.textContent = "Unit " + u;
+      unitSelect.appendChild(opt);
     });
 
-    const wrapper = createEl("div", "space-y-2", []);
+    // Skill select
+    const skillLabelEl = createEl("span", "text-gray-600", ["Skill"]);
+    const skillSelect = document.createElement("select");
+    skillSelect.className =
+      "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
+    const skillAllOpt = document.createElement("option");
+    skillAllOpt.value = "";
+    skillAllOpt.textContent = "All skills";
+    skillSelect.appendChild(skillAllOpt);
+    skillValues.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s;
+      skillSelect.appendChild(opt);
+    });
 
-    wrapper.appendChild(
-      createEl("p", "text-sm text-gray-600", [
-        `Showing ${qs.length} question${qs.length === 1 ? "" : "s"}. Click Edit or Delete to manage your bank.`,
-      ])
-    );
+    // Difficulty select
+    const diffLabelEl = createEl("span", "text-gray-600", ["Difficulty"]);
+    const diffSelect = document.createElement("select");
+    diffSelect.className =
+      "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
+    const diffAllOpt = document.createElement("option");
+    diffAllOpt.value = "";
+    diffAllOpt.textContent = "All levels";
+    diffSelect.appendChild(diffAllOpt);
+    diffValues.forEach((d) => {
+      const opt = document.createElement("option");
+      opt.value = d;
+      opt.textContent = d;
+      diffSelect.appendChild(opt);
+    });
+
+    filterRow.appendChild(unitLabelEl);
+    filterRow.appendChild(unitSelect);
+    filterRow.appendChild(skillLabelEl);
+    filterRow.appendChild(skillSelect);
+    filterRow.appendChild(diffLabelEl);
+    filterRow.appendChild(diffSelect);
+
+    wrapper.appendChild(filterRow);
+
+    const summary = createEl("p", "text-sm text-gray-600", [""]);
+    wrapper.appendChild(summary);
 
     const list = createEl(
       "div",
       "divide-y divide-gray-100 border border-gray-100 rounded-lg bg-white",
       []
     );
-
-    qs.forEach((q) => {
-      const row = createEl(
-        "div",
-        "px-3 py-2 flex flex-col gap-1 md:flex-row md:items-start md:justify-between",
-        []
-      );
-
-      const unitLabel =
-        q.unit != null ? `Unit ${q.unit}` : "Unit ?";
-      const skillLabel = q.skill ? ` · ${q.skill}` : "";
-      const diffLabel = q.difficulty ? ` · ${q.difficulty}` : "";
-
-      const titleText =
-        q.question && q.question.length > 160
-          ? q.question.slice(0, 157) + "…"
-          : q.question || "(no text)";
-
-      const left = createEl("div", "", [
-        createEl("p", "text-sm font-medium text-gray-900", [
-          titleText,
-        ]),
-        createEl("p", "text-xs text-gray-500", [
-          unitLabel + skillLabel + diffLabel,
-        ]),
-      ]);
-
-      const btnRow = createEl(
-        "div",
-        "flex items-center gap-1 mt-1 md:mt-0",
-        []
-      );
-
-      const editBtn = createEl(
-        "button",
-        "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
-        ["Edit text"]
-      );
-      const explainBtn = createEl(
-        "button",
-        "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
-        ["Edit explanation"]
-      );
-      const deleteBtn = createEl(
-        "button",
-        "px-2 py-1 text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50",
-        ["Delete"]
-      );
-
-      btnRow.appendChild(editBtn);
-      btnRow.appendChild(explainBtn);
-      btnRow.appendChild(deleteBtn);
-
-      editBtn.addEventListener("click", async () => {
-        const current = q.question || "";
-        const updated = window.prompt(
-          "Edit question text:",
-          current
-        );
-        if (updated == null || updated === current) return;
-        try {
-          await DataManager.updateQuestion(q.id, {
-            question: updated,
-          });
-          q.question = updated;
-          const newTitle =
-            updated.length > 160
-              ? updated.slice(0, 157) + "…"
-              : updated;
-          left.querySelector(
-            ".text-sm.font-medium.text-gray-900"
-          ).textContent = newTitle;
-          Toast.show("Question updated.", "success");
-        } catch (err) {
-          console.error("Update question error", err);
-          Toast.show("Could not update question.", "error");
-        }
-      });
-
-      explainBtn.addEventListener("click", async () => {
-        const current = q.explanation || "";
-        const updated = window.prompt(
-          "Edit explanation:",
-          current
-        );
-        if (updated == null || updated === current) return;
-        try {
-          await DataManager.updateQuestion(q.id, {
-            explanation: updated,
-          });
-          q.explanation = updated;
-          Toast.show("Explanation updated.", "success");
-        } catch (err) {
-          console.error("Update explanation error", err);
-          Toast.show("Could not update explanation.", "error");
-        }
-      });
-
-      deleteBtn.addEventListener("click", async () => {
-        const ok = window.confirm(
-          "Delete this question from your bank?"
-        );
-        if (!ok) return;
-        try {
-          await DataManager.deleteQuestion(q.id);
-          list.removeChild(row);
-          Toast.show("Question deleted.", "success");
-        } catch (err) {
-          console.error("Delete question error", err);
-          Toast.show("Could not delete question.", "error");
-        }
-      });
-
-      row.appendChild(left);
-      row.appendChild(btnRow);
-      list.appendChild(row);
-    });
-
     wrapper.appendChild(list);
-    body.innerHTML = "";
+
+    function renderQuestionLibraryList() {
+      let filtered = allQuestions.slice();
+
+      const unitVal = unitSelect.value;
+      const skillVal = skillSelect.value;
+      const diffVal = diffSelect.value;
+
+      if (unitVal) {
+        filtered = filtered.filter(
+          (q) => String(q.unit || "") === unitVal
+        );
+      }
+      if (skillVal) {
+        filtered = filtered.filter(
+          (q) => (q.skill || "").trim() === skillVal
+        );
+      }
+      if (diffVal) {
+        filtered = filtered.filter(
+          (q) => (q.difficulty || "").trim() === diffVal
+        );
+      }
+
+      // Sort questions by unit, then text (same idea as before)
+      filtered.sort((a, b) => {
+        const ua = typeof a.unit === "number" ? a.unit : 0;
+        const ub = typeof b.unit === "number" ? b.unit : 0;
+        if (ua !== ub) return ua - ub;
+        const qa = (a.question || "").toLowerCase();
+        const qb = (b.question || "").toLowerCase();
+        if (qa < qb) return -1;
+        if (qa > qb) return 1;
+        return 0;
+      });
+
+      list.innerHTML = "";
+
+      summary.textContent = `Showing ${
+        filtered.length
+      } question${
+        filtered.length === 1 ? "" : "s"
+      }. Use filters or Edit / Delete to manage your bank.`;
+
+      if (!filtered.length) {
+        list.appendChild(
+          createEl("p", "text-sm text-gray-500 px-3 py-2", [
+            "No questions match your filters. Try changing the unit, skill, or difficulty.",
+          ])
+        );
+        return;
+      }
+
+      filtered.forEach((q) => {
+        const row = createEl(
+          "div",
+          "px-3 py-2 flex flex-col gap-1 md:flex-row md:items-start md:justify-between",
+          []
+        );
+
+        const unitLabel =
+          q.unit != null ? "Unit " + q.unit : "Unit ?";
+        const skillLabel = q.skill ? " · " + q.skill : "";
+        const diffLabel = q.difficulty ? " · " + q.difficulty : "";
+
+        const titleText =
+          q.question && q.question.length > 160
+            ? q.question.slice(0, 157) + "…"
+            : q.question || "(no text)";
+
+        const left = createEl("div", "", [
+          createEl("p", "text-sm font-medium text-gray-900", [
+            titleText,
+          ]),
+          createEl("p", "text-xs text-gray-500", [
+            unitLabel + skillLabel + diffLabel,
+          ]),
+        ]);
+
+        const btnRow = createEl(
+          "div",
+          "flex items-center gap-1 mt-1 md:mt-0",
+          []
+        );
+
+        const editBtn = createEl(
+          "button",
+          "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
+          ["Edit text"]
+        );
+        const explainBtn = createEl(
+          "button",
+          "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
+          ["Edit explanation"]
+        );
+        const deleteBtn = createEl(
+          "button",
+          "px-2 py-1 text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50",
+          ["Delete"]
+        );
+
+        btnRow.appendChild(editBtn);
+        btnRow.appendChild(explainBtn);
+        btnRow.appendChild(deleteBtn);
+
+        editBtn.addEventListener("click", async () => {
+          const current = q.question || "";
+          const updated = window.prompt(
+            "Edit question text:",
+            current
+          );
+          if (updated == null || updated === current) return;
+          try {
+            await DataManager.updateQuestion(q.id, {
+              question: updated,
+            });
+            q.question = updated;
+            Toast.show("Question updated.", "success");
+            renderQuestionLibraryList();
+          } catch (err) {
+            console.error("Update question error", err);
+            Toast.show("Could not update question.", "error");
+          }
+        });
+
+        explainBtn.addEventListener("click", async () => {
+          const current = q.explanation || "";
+          const updated = window.prompt(
+            "Edit explanation:",
+            current
+          );
+          if (updated == null || updated === current) return;
+          try {
+            await DataManager.updateQuestion(q.id, {
+              explanation: updated,
+            });
+            q.explanation = updated;
+            Toast.show("Explanation updated.", "success");
+          } catch (err) {
+            console.error("Update explanation error", err);
+            Toast.show("Could not update explanation.", "error");
+          }
+        });
+
+        deleteBtn.addEventListener("click", async () => {
+          const ok = window.confirm(
+            "Delete this question from your bank?"
+          );
+          if (!ok) return;
+          try {
+            await DataManager.deleteQuestion(q.id);
+            const idx = allQuestions.findIndex(
+              (qq) => qq.id === q.id
+            );
+            if (idx !== -1) {
+              allQuestions.splice(idx, 1);
+            }
+            Toast.show("Question deleted.", "success");
+            renderQuestionLibraryList();
+          } catch (err) {
+            console.error("Delete question error", err);
+            Toast.show("Could not delete question.", "error");
+          }
+        });
+
+        row.appendChild(left);
+        row.appendChild(btnRow);
+        list.appendChild(row);
+      });
+    }
+
+    unitSelect.addEventListener("change", renderQuestionLibraryList);
+    skillSelect.addEventListener("change", renderQuestionLibraryList);
+    diffSelect.addEventListener("change", renderQuestionLibraryList);
+
+    renderQuestionLibraryList();
+
     body.appendChild(wrapper);
-  } catch (err) {
-    console.error("Question library error", err);
+  } catch (e) {
+    console.error("Question library load error", e);
     body.innerHTML = "";
     body.appendChild(
       createEl("p", "text-sm text-red-600", [
-        "Unable to load question library. Please try again later.",
+        "Unable to load questions right now. Try again later.",
       ])
     );
   }
 }
+
 
       // ---------------- Spaced Repetition ----------------
       const SpacedRepetition = {
@@ -3621,154 +3759,332 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           }
         }
 
-        function openQuestionPicker() {
-          const overlay = createEl(
-            "div",
-            "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
-            []
-          );
-          const panel = createEl(
-            "div",
-            "bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-gray-200",
-            []
-          );
+function openQuestionPicker() {
+  const overlay = createEl(
+    "div",
+    "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+    []
+  );
+  const panel = createEl(
+    "div",
+    "bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-gray-200",
+    []
+  );
 
-          const header = createEl(
-            "div",
-            "flex items-center justify-between px-4 py-3 border-b border-gray-200",
-            []
-          );
-          header.appendChild(
-            createEl("h3", "text-xs font-semibold text-gray-900", [
-              "Pick questions",
-            ])
-          );
-          const closeBtn = createEl(
-            "button",
-            "text-sm text-gray-500 hover:text-gray-900 focus:outline-none",
-            ["Close"]
-          );
-          closeBtn.addEventListener("click", () => {
-            document.body.removeChild(overlay);
-          });
-          header.appendChild(closeBtn);
-          panel.appendChild(header);
+  const header = createEl(
+    "div",
+    "flex items-center justify-between px-4 py-3 border-b border-gray-200",
+    []
+  );
+  header.appendChild(
+    createEl("h3", "text-xs font-semibold text-gray-900", [
+      "Pick questions",
+    ])
+  );
+  const closeBtn = createEl(
+    "button",
+    "text-sm text-gray-500 hover:text-gray-900 focus:outline-none",
+    ["Close"]
+  );
+  closeBtn.addEventListener("click", () => {
+    document.body.removeChild(overlay);
+  });
+  header.appendChild(closeBtn);
+  panel.appendChild(header);
 
-          const body = createEl(
-            "div",
-            "flex-1 overflow-auto px-4 py-3 space-y-2 text-sm",
-            []
-          );
-          body.appendChild(
-            createEl("p", "text-sm text-gray-500 mb-1", [
-              "Select any questions you want in this custom assignment.",
-            ])
-          );
-          const list = createEl("div", "space-y-1", []);
-          body.appendChild(list);
-          panel.appendChild(body);
+  const body = createEl(
+    "div",
+    "flex-1 overflow-auto px-4 py-3 space-y-2 text-sm",
+    []
+  );
+  panel.appendChild(body);
 
-          const footer = createEl(
-            "div",
-            "px-4 py-3 border-t border-gray-200 flex items-center justify-between text-sm",
-            []
-          );
-          const summary = createEl(
-            "span",
-            "text-sm text-gray-600",
-            ["Loading questions..."]
-          );
-          const doneBtn = createEl(
-            "button",
-            "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-            ["Done"]
-          );
-          doneBtn.addEventListener("click", () => {
-            updateCustomLabel();
-            document.body.removeChild(overlay);
-          });
-          const clearBtn = createEl(
-            "button",
-            "px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
-            ["Clear"]
-          );
-          clearBtn.addEventListener("click", () => {
-            currentCustomQuestionIds = [];
-            Array.from(
-              list.querySelectorAll("input[type='checkbox']")
-            ).forEach((cb) => {
-              cb.checked = false;
-            });
-            summary.textContent = "0 questions selected.";
-          });
-          footer.appendChild(summary);
-          const right = createEl("div", "flex items-center gap-2", []);
-          right.appendChild(clearBtn);
-          right.appendChild(doneBtn);
-          footer.appendChild(right);
-          panel.appendChild(footer);
+  const footer = createEl(
+    "div",
+    "px-4 py-3 border-t border-gray-200 flex items-center justify-between text-sm",
+    []
+  );
+  const summary = createEl(
+    "span",
+    "text-sm text-gray-600",
+    ["Loading questions..."]
+  );
+  const doneBtn = createEl(
+    "button",
+    "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+    ["Done"]
+  );
+  doneBtn.addEventListener("click", () => {
+    updateCustomLabel();
+    document.body.removeChild(overlay);
+  });
+  const clearBtn = createEl(
+    "button",
+    "px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+    ["Clear"]
+  );
+  clearBtn.addEventListener("click", () => {
+    currentCustomQuestionIds = [];
+    if (typeof renderPickerList === "function") {
+      renderPickerList();
+    }
+    summary.textContent = "0 questions selected.";
+  });
+  footer.appendChild(summary);
+  const right = createEl("div", "flex items-center gap-2", []);
+  right.appendChild(clearBtn);
+  right.appendChild(doneBtn);
+  footer.appendChild(right);
+  panel.appendChild(footer);
 
-          overlay.appendChild(panel);
-          document.body.appendChild(overlay);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
 
-          QuestionService.getQuestions()
-            .then((qs) => {
-              if (!qs.length) {
-                summary.textContent =
-                  "No questions available yet. Add questions to the bank first.";
-                return;
-              }
-              summary.textContent = `${
-                currentCustomQuestionIds.length
-              } question${
-                currentCustomQuestionIds.length === 1 ? "" : "s"
-              } selected.`;
-              qs.forEach((q) => {
-                const row = createEl(
-                  "label",
-                  "flex items-start gap-2 border border-gray-200 rounded-lg px-2 py-1",
-                  []
-                );
-                const cb = document.createElement("input");
-                cb.type = "checkbox";
-                cb.className = "mt-1 h-3 w-3 text-blue-600";
-                cb.value = q.id;
-                cb.checked = currentCustomQuestionIds.includes(q.id);
-                cb.addEventListener("change", () => {
-                  if (cb.checked) {
-                    if (!currentCustomQuestionIds.includes(q.id)) {
-                      currentCustomQuestionIds.push(q.id);
-                    }
-                  } else {
-                    currentCustomQuestionIds = currentCustomQuestionIds.filter(
-                      (x) => x !== q.id
-                    );
-                  }
-                  summary.textContent = `${
-                    currentCustomQuestionIds.length
-                  } question${
-                    currentCustomQuestionIds.length === 1 ? "" : "s"
-                  } selected.`;
-                });
-                row.appendChild(cb);
-                const text = createEl("div", "flex-1", [
-                  createEl("p", "text-sm text-gray-800", [q.question]),
-                  createEl("p", "text-xs text-gray-500 mt-0.5", [
-                    `Unit ${q.unit || "?"}${
-                      q.skill ? " · " + q.skill : ""
-                    }`,
-                  ]),
-                ]);
-                row.appendChild(text);
-                list.appendChild(row);
-              });
-            })
-            .catch((e) => {
-              console.error("Question picker load error", e);
-              summary.textContent =
-                "Unable to load questions right now. Try again later.";
-            });
-        }
+  let allQuestions = [];
+  let unitSelect, skillSelect, diffSelect;
+  let list;
+
+  function renderPickerList() {
+    if (!allQuestions.length || !list) return;
+    let filtered = allQuestions.slice();
+
+    const unitVal = unitSelect ? unitSelect.value : "";
+    const skillVal = skillSelect ? skillSelect.value : "";
+    const diffVal = diffSelect ? diffSelect.value : "";
+
+    if (unitVal) {
+      filtered = filtered.filter(
+        (q) => String(q.unit || "") === unitVal
+      );
+    }
+    if (skillVal) {
+      filtered = filtered.filter(
+        (q) => (q.skill || "").trim() === skillVal
+      );
+    }
+    if (diffVal) {
+      filtered = filtered.filter(
+        (q) => (q.difficulty || "").trim() === diffVal
+      );
+    }
+
+    filtered.sort((a, b) => {
+      const ua = typeof a.unit === "number" ? a.unit : 0;
+      const ub = typeof b.unit === "number" ? b.unit : 0;
+      if (ua !== ub) return ua - ub;
+      const sa = (a.skill || "").toLowerCase();
+      const sb = (b.skill || "").toLowerCase();
+      if (sa < sb) return -1;
+      if (sa > sb) return 1;
+      const qa = (a.question || "").toLowerCase();
+      const qb = (b.question || "").toLowerCase();
+      if (qa < qb) return -1;
+      if (qa > qb) return 1;
+      return 0;
+    });
+
+    list.innerHTML = "";
+
+    if (!filtered.length) {
+      list.appendChild(
+        createEl("p", "text-sm text-gray-500", [
+          "No questions match your filters. Try changing the unit, skill, or difficulty.",
+        ])
+      );
+    } else {
+      filtered.forEach((q) => {
+        const row = createEl(
+          "label",
+          "flex items-start gap-2 border border-gray-200 rounded-lg px-2 py-1",
+          []
+        );
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "mt-1 h-3 w-3 text-blue-600";
+        cb.value = q.id;
+        cb.checked = currentCustomQuestionIds.includes(q.id);
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            if (!currentCustomQuestionIds.includes(q.id)) {
+              currentCustomQuestionIds.push(q.id);
+            }
+          } else {
+            currentCustomQuestionIds = currentCustomQuestionIds.filter(
+              (x) => x !== q.id
+            );
+          }
+          summary.textContent = `${
+            currentCustomQuestionIds.length
+          } question${
+            currentCustomQuestionIds.length === 1 ? "" : "s"
+          } selected. Showing ${
+            filtered.length
+          } question${
+            filtered.length === 1 ? "" : "s"
+          } in this view.`;
+        });
+        row.appendChild(cb);
+        const text = createEl("div", "flex-1", [
+          createEl("p", "text-sm text-gray-800", [q.question]),
+          createEl("p", "text-xs text-gray-500 mt-0.5", [
+            `Unit ${q.unit || "?"}${
+              q.skill ? " · " + q.skill : ""
+            }${
+              q.difficulty ? " · " + q.difficulty : ""
+            }`,
+          ]),
+        ]);
+        row.appendChild(text);
+        list.appendChild(row);
+      });
+    }
+
+    summary.textContent = `${
+      currentCustomQuestionIds.length
+    } question${
+      currentCustomQuestionIds.length === 1 ? "" : "s"
+    } selected. Showing ${
+      filtered.length
+    } question${
+      filtered.length === 1 ? "" : "s"
+    } in this view.`;
+  }
+
+  QuestionService.getQuestions()
+    .then((qs) => {
+      if (!qs.length) {
+        summary.textContent =
+          "No questions available yet. Add questions to the bank first.";
+        body.innerHTML = "";
+        body.appendChild(
+          createEl("p", "text-sm text-gray-500", [
+            "No questions available yet. Add questions to the bank first.",
+          ])
+        );
+        return;
+      }
+
+      allQuestions = qs.slice();
+
+      body.innerHTML = "";
+      body.appendChild(
+        createEl("p", "text-sm text-gray-500 mb-1", [
+          "Select any questions you want in this custom assignment. Use the filters to narrow by unit, skill, or difficulty.",
+        ])
+      );
+
+      const filterRow = createEl(
+        "div",
+        "flex flex-wrap gap-2 items-center text-xs md:text-sm mb-2",
+        []
+      );
+
+      // Build filter options
+      const unitValues = Array.from(
+        new Set(
+          allQuestions
+            .map((q) =>
+              typeof q.unit === "number" ? q.unit : null
+            )
+            .filter((v) => v != null)
+        )
+      ).sort((a, b) => a - b);
+
+      const skillValues = Array.from(
+        new Set(
+          allQuestions
+            .map((q) => (q.skill || "").trim())
+            .filter((v) => v)
+        )
+      ).sort((a, b) => a.localeCompare(b));
+
+      const diffValues = Array.from(
+        new Set(
+          allQuestions
+            .map((q) => (q.difficulty || "").trim())
+            .filter((v) => v)
+        )
+      ).sort((a, b) => a.localeCompare(b));
+
+      // Unit select
+      const unitLabelEl = createEl("span", "text-gray-600", ["Unit"]);
+      unitSelect = document.createElement("select");
+      unitSelect.className =
+        "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
+      const unitAllOpt = document.createElement("option");
+      unitAllOpt.value = "";
+      unitAllOpt.textContent = "All units";
+      unitSelect.appendChild(unitAllOpt);
+      unitValues.forEach((u) => {
+        const opt = document.createElement("option");
+        opt.value = String(u);
+        opt.textContent = "Unit " + u;
+        unitSelect.appendChild(opt);
+      });
+
+      // Skill select
+      const skillLabelEl = createEl("span", "text-gray-600", ["Skill"]);
+      skillSelect = document.createElement("select");
+      skillSelect.className =
+        "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
+      const skillAllOpt = document.createElement("option");
+      skillAllOpt.value = "";
+      skillAllOpt.textContent = "All skills";
+      skillSelect.appendChild(skillAllOpt);
+      skillValues.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        skillSelect.appendChild(opt);
+      });
+
+      // Difficulty select
+      const diffLabelEl = createEl("span", "text-gray-600", ["Difficulty"]);
+      diffSelect = document.createElement("select");
+      diffSelect.className =
+        "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
+      const diffAllOpt = document.createElement("option");
+      diffAllOpt.value = "";
+      diffAllOpt.textContent = "All levels";
+      diffSelect.appendChild(diffAllOpt);
+      diffValues.forEach((d) => {
+        const opt = document.createElement("option");
+        opt.value = d;
+        opt.textContent = d;
+        diffSelect.appendChild(opt);
+      });
+
+      filterRow.appendChild(unitLabelEl);
+      filterRow.appendChild(unitSelect);
+      filterRow.appendChild(skillLabelEl);
+      filterRow.appendChild(skillSelect);
+      filterRow.appendChild(diffLabelEl);
+      filterRow.appendChild(diffSelect);
+
+      body.appendChild(filterRow);
+
+      list = createEl("div", "space-y-1", []);
+      body.appendChild(list);
+
+      unitSelect.addEventListener("change", renderPickerList);
+      skillSelect.addEventListener("change", renderPickerList);
+      diffSelect.addEventListener("change", renderPickerList);
+
+      renderPickerList();
+    })
+    .catch((e) => {
+      console.error("Question picker load error", e);
+      summary.textContent =
+        "Unable to load questions right now. Try again later.";
+      body.innerHTML = "";
+      body.appendChild(
+        createEl("p", "text-sm text-red-600", [
+          "Unable to load questions right now. Try again later.",
+        ])
+      );
+    });
+}
+
 
         pickerBtn.addEventListener("click", () => {
           openQuestionPicker();
