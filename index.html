@@ -377,7 +377,14 @@
         });
         return el;
       }
-
+function createElHTML(tag, className = "", html = "") {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (html != null) {
+    el.innerHTML = html;
+  }
+  return el;
+}
       const Toast = {
         show(message, type = "info") {
           const existing = document.querySelector(".toast-banner");
@@ -413,35 +420,46 @@
         );
       }
 
-      function unitBar(unit, accuracy, total, barClass) {
-        const pct = Math.round((accuracy || 0) * 100);
-        const wrapper = createEl("div", "mb-2", []);
-        wrapper.appendChild(
-          createEl(
-            "div",
-            "flex justify-between text-sm text-gray-700 mb-0.5",
-            [
-              `Unit ${unit}`,
-              total != null ? `${pct}% · ${total} Q` : `${pct}%`,
-            ]
-          )
-        );
-        const bar = createEl(
-          "div",
-          "w-full h-2 bg-gray-200 rounded-full overflow-hidden",
-          []
-        );
-        const fill = createEl(
-          "div",
-          `h-2 rounded-full ${barClass || "bg-blue-600"}`,
-          []
-        );
-        fill.style.width = `${pct}%`;
-        bar.appendChild(fill);
-        wrapper.appendChild(bar);
-        return wrapper;
-      }
+     function unitBar(unit, accuracy, total, barClass) {
+  const pct = Math.round((accuracy || 0) * 100);
+  const wrapper = createEl("div", "mb-2", []);
 
+  // header row with proper left/right spacing
+  const header = createEl(
+    "div",
+    "flex justify-between text-sm text-gray-700 mb-0.5",
+    [
+      createEl("span", "", [`Unit ${unit}`]),
+      createEl(
+        "span",
+        "",
+        [total != null ? `${pct}% · ${total} Q` : `${pct}%`]
+      ),
+    ]
+  );
+  wrapper.appendChild(header);
+
+  // bar background
+  const bar = createEl(
+    "div",
+    "w-full h-2 bg-gray-200 rounded-full overflow-hidden",
+    []
+  );
+
+  // bar fill
+  const fill = createEl(
+    "div",
+    `h-2 rounded-full ${barClass || "bg-blue-600"}`,
+    []
+  );
+  fill.style.width = `${pct}%`;
+  bar.appendChild(fill);
+  wrapper.appendChild(bar);
+
+  return wrapper;
+}
+
+        
       function formatDateTimeISO(iso) {
         if (!iso) return "—";
         const d = new Date(iso);
@@ -1798,136 +1816,150 @@ async function openQuestionLibrary() {
         renderCurrentTab();
       }
 
-      function renderQuiz() {
-        const quiz = AppState.currentQuiz;
-        const content = $("tab-content");
-        if (!quiz) {
-          content.innerHTML =
-            "<p class='text-xs text-gray-500'>No quiz in progress.</p>";
-          return;
+
+
+
+function renderQuiz() {
+  const quiz = AppState.currentQuiz;
+  const content = $("tab-content");
+  if (!quiz) {
+    content.innerHTML =
+      "<p class='text-xs text-gray-500'>No quiz in progress.</p>";
+    return;
+  }
+
+  const q = quiz.questions[quiz.index];
+  const answered = quiz.answers[quiz.index];
+
+  const wrapper = createEl("div", "space-y-3", []);
+
+  const header = createEl(
+    "div",
+    "flex justify-between items-center text-sm text-gray-600",
+    [
+      createEl("span", "", [
+        `Question ${quiz.index + 1} of ${quiz.questions.length}`,
+      ]),
+    ]
+  );
+
+  if (quiz.timeLimitMinutes) {
+    const timerEl = createEl("span", "font-mono", [""]);
+    header.appendChild(timerEl);
+    if (!quizTimerInterval) {
+      const endTime = quiz.startedAt + quiz.timeLimitMinutes * 60 * 1000;
+      quizTimerInterval = setInterval(() => {
+        const now = Date.now();
+        const remaining = Math.max(0, endTime - now);
+        const mins = Math.floor(remaining / 60000);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        timerEl.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+        if (remaining <= 0) {
+          clearInterval(quizTimerInterval);
+          quizTimerInterval = null;
+          finishQuiz(true);
         }
-        const q = quiz.questions[quiz.index];
-        const answered = quiz.answers[quiz.index];
-        const wrapper = createEl("div", "space-y-3", []);
-        const header = createEl(
-  "div",
-  "flex justify-between items-center text-sm text-gray-600",
-  [
+      }, 1000);
+    }
+  }
 
-            createEl("span", "", [
-              `Question ${quiz.index + 1} of ${quiz.questions.length}`,
-            ]),
-          ]
-        );
+  wrapper.appendChild(header);
 
-        if (quiz.timeLimitMinutes) {
-          const timerEl = createEl("span", "font-mono", [""]);
-          header.appendChild(timerEl);
-          if (!quizTimerInterval) {
-            const endTime =
-              quiz.startedAt + quiz.timeLimitMinutes * 60 * 1000;
-            quizTimerInterval = setInterval(() => {
-              const now = Date.now();
-              const remaining = Math.max(0, endTime - now);
-              const mins = Math.floor(remaining / 60000);
-              const secs = Math.floor((remaining % 60000) / 1000);
-              timerEl.textContent = `${mins}:${secs
-                .toString()
-                .padStart(2, "0")}`;
-              if (remaining <= 0) {
-                clearInterval(quizTimerInterval);
-                quizTimerInterval = null;
-                finishQuiz(true);
-              }
-            }, 1000);
-          }
-        }
+  const qCard = createEl(
+    "div",
+    "bg-white border border-gray-200 rounded-xl p-4 md:p-5 shadow-sm space-y-3",
+    []
+  );
 
-        wrapper.appendChild(header);
+  qCard.appendChild(
+    createElHTML(
+      "p",
+      "text-base md:text-lg font-semibold text-gray-900 leading-relaxed",
+      q.question || ""
+    )
+  );
 
-        const qCard = createEl(
-          "div",
-          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
-          []
-        );
-        qCard.appendChild(
-  createEl("p", "text-base md:text-lg font-semibold text-gray-900 leading-relaxed", [q.question])
-);
+  const list = createEl("div", "space-y-1", []);
+  q.options.forEach((opt, idx) => {
+    const isSelected = answered === idx;
+    const btn = createEl(
+      "button",
+      "w-full text-left px-3 py-2 rounded-lg border text-sm md:text-base leading-relaxed transition-colors " +
+        (isSelected
+          ? "border-blue-600 bg-blue-50 text-blue-800"
+          : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"),
+      []
+    );
 
-        const list = createEl("div", "space-y-1", []);
-        q.options.forEach((opt, idx) => {
-          const isSelected = answered === idx;
-          const btn = createEl(
-  "button",
-  "w-full text-left px-3 py-2 rounded-lg border text-sm md:text-base leading-relaxed transition-colors " +
-    (isSelected
-      ? "border-blue-600 bg-blue-50 text-blue-800"
-      : "border-gray-300 hover:border-blue-400 hover:bg-gray-50"),
-  [opt]
-);
+    btn.innerHTML = opt || "";
 
-          btn.addEventListener("click", () => {
-            quiz.answers[quiz.index] = idx;
-            renderQuiz();
-          });
-          list.appendChild(btn);
-        });
-        qCard.appendChild(list);
-        wrapper.appendChild(qCard);
+    btn.addEventListener("click", () => {
+      quiz.answers[quiz.index] = idx;
+      renderQuiz();
+    });
+    list.appendChild(btn);
+  });
 
-        const controls = createEl(
-          "div",
-          "flex justify-between items-center mt-2",
-          []
-        );
-        const prevBtn = createEl(
-          "button",
-          "px-3 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
-          ["Previous"]
-        );
-        prevBtn.disabled = quiz.index === 0;
-        prevBtn.addEventListener("click", () => {
-          if (quiz.index > 0) {
-            quiz.index--;
-            renderQuiz();
-          }
-        });
-        const nextBtn = createEl(
-          "button",
-          "px-3 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
-          ["Next"]
-        );
-        nextBtn.disabled = quiz.index === quiz.questions.length - 1;
-        nextBtn.addEventListener("click", () => {
-          if (quiz.index < quiz.questions.length - 1) {
-            quiz.index++;
-            renderQuiz();
-          }
-        });
-        const finishBtn = createEl(
-          "button",
-          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-          ["Finish"]
-        );
-        finishBtn.addEventListener("click", () => {
-          if (
-            confirm(
-              "Finish this quiz and view results? You won't be able to change answers."
-            )
-          ) {
-            finishQuiz(false);
-          }
-        });
-        controls.appendChild(prevBtn);
-        controls.appendChild(nextBtn);
-        controls.appendChild(finishBtn);
-        wrapper.appendChild(controls);
+  qCard.appendChild(list);
+  wrapper.appendChild(qCard);
 
-        content.innerHTML = "";
-        content.appendChild(wrapper);
-      }
+  const controls = createEl(
+    "div",
+    "flex justify-between items-center mt-2",
+    []
+  );
 
-      async function finishQuiz(autoFromTimer) {
+  const prevBtn = createEl(
+    "button",
+    "px-3 py-1.5 rounded-lg border border-gray-300 text-xs md:text-sm bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+    ["Previous"]
+  );
+  prevBtn.disabled = quiz.index === 0;
+  prevBtn.addEventListener("click", () => {
+    if (quiz.index > 0) {
+      quiz.index--;
+      renderQuiz();
+    }
+  });
+
+  const nextBtn = createEl(
+    "button",
+    "px-3 py-1.5 rounded-lg border border-gray-300 text-xs md:text-sm bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+    ["Next"]
+  );
+  nextBtn.disabled = quiz.index === quiz.questions.length - 1;
+  nextBtn.addEventListener("click", () => {
+    if (quiz.index < quiz.questions.length - 1) {
+      quiz.index++;
+      renderQuiz();
+    }
+  });
+
+  const finishBtn = createEl(
+    "button",
+    "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs md:text-sm rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+    ["Finish"]
+  );
+  finishBtn.addEventListener("click", () => {
+    if (
+      confirm(
+        "Finish this quiz and view results? You won't be able to change answers."
+      )
+    ) {
+      finishQuiz(false);
+    }
+  });
+
+  controls.appendChild(prevBtn);
+  controls.appendChild(nextBtn);
+  controls.appendChild(finishBtn);
+  wrapper.appendChild(controls);
+
+  content.innerHTML = "";
+  content.appendChild(wrapper);
+}
+
+async function finishQuiz(autoFromTimer) {
         const quiz = AppState.currentQuiz;
         if (!quiz) return;
         if (quizTimerInterval) {
@@ -2122,7 +2154,6 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
         AppState.currentQuiz = null;
       }
-
       // ---------------- Student Views ----------------
       async function renderStudentDashboard() {
         const content = $("tab-content");
