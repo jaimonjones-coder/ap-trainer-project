@@ -266,13 +266,8 @@
     </div>     <!-- end main card -->
   </div>       <!-- end outer wrapper (max-w-7xl) -->
 
-  <!-- Individual Student Progress Modal -->
-  <div
-    id="student-progress-overlay"
-    class="fixed inset-0 bg-black/40 z-40 hidden items-center justify-center"
-  >
-    ...
-
+ <!-- Individual Student Progress Modal -->
+<div
   id="student-progress-overlay"
   class="fixed inset-0 bg-black/40 z-40 hidden items-center justify-center"
 >
@@ -294,19 +289,20 @@
         id="student-progress-close"
         class="text-gray-400 hover:text-gray-600 text-lg leading-none px-2"
         type="button"
+        aria-label="Close student progress panel"
       >
         ×
       </button>
     </div>
     <div
-  id="student-progress-body"
-  class="p-4 space-y-4 text-sm overflow-y-auto"
->
-
+      id="student-progress-body"
+      class="p-4 space-y-4 text-sm overflow-y-auto"
+    >
       <!-- Filled by JS -->
     </div>
   </div>
 </div>
+
     <!-- Question Library Modal -->
 <div
   id="question-library-overlay"
@@ -323,12 +319,14 @@
         Question library
       </h2>
       <button
-        id="question-library-close"
-        class="text-gray-400 hover:text-gray-600 text-lg leading-none px-2"
-        type="button"
-      >
-        ×
-      </button>
+  id="question-library-close"
+  class="text-gray-400 hover:text-gray-600 text-lg leading-none px-2"
+  type="button"
+  aria-label="Close question library"
+>
+  ×
+</button>
+
     </div>
     <div
   id="question-library-body"
@@ -716,7 +714,6 @@ async listAssignmentsForTeacher(teacherId) {
             .get();
           return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         },
-
         async getQuestions(filter = {}) {
           let ref = db.collection("questions");
           if (filter.unit != null) {
@@ -727,20 +724,22 @@ async listAssignmentsForTeacher(teacherId) {
           if (!qs.length) return QuestionService.seedQuestions(filter.unit);
           return qs;
         },
-     async updateQuestion(id, updates) {
-       if (!id || !updates) return;
-       const ref = db.collection("questions").doc(id);
-       await ref.update({
-         ...updates,
-         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-       });
-     },
 
-     async deleteQuestion(id) {
-       if (!id) return;
-       const ref = db.collection("questions").doc(id);
-       await ref.delete();
-     },
+        async updateQuestion(id, updates) {
+          if (!id || !updates) return;
+          const ref = db.collection("questions").doc(id);
+          await ref.update({
+            ...updates,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        },
+
+        async deleteQuestion(id) {
+          if (!id) return;
+          const ref = db.collection("questions").doc(id);
+          await ref.delete();
+        },
+
         async batchUploadQuestions(questions) {
           if (!questions.length) return { created: 0 };
           // Firestore batch limit is 500
@@ -764,8 +763,41 @@ async listAssignmentsForTeacher(teacherId) {
           }
           return { created };
         },
-      };
 
+        // ⭐ Starred questions helpers
+        async addStarQuestion(userId, questionId) {
+          if (!userId || !questionId) return;
+          await db
+            .collection("users")
+            .doc(userId)
+            .collection("stars")
+            .doc(questionId)
+            .set({
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+        },
+
+        async removeStarQuestion(userId, questionId) {
+          if (!userId || !questionId) return;
+          await db
+            .collection("users")
+            .doc(userId)
+            .collection("stars")
+            .doc(questionId)
+            .delete();
+        },
+
+        async listStarredQuestionIds(userId) {
+          if (!userId) return [];
+          const snap = await db
+            .collection("users")
+            .doc(userId)
+            .collection("stars")
+            .get();
+          return snap.docs.map((d) => d.id);
+        },
+      };
+        
       // ---------------- Question Service ----------------
       const QuestionService = {
         async getQuestions(filter = {}) {
@@ -1650,77 +1682,140 @@ async function openQuestionLibrary() {
         return card;
       }
 
-      // ---------------- Practice + Quiz Engine ----------------
-      async function startPractice({ mode, unit, limit }) {
-        const userId = AppState.user.uid;
-        let questions = [];
+     // ---------------- Practice + Quiz Engine ----------------
+async function startPractice({ mode, unit, limit }) {
+  const userId = AppState.user.uid;
+  let questions = [];
 
-        try {
-          if (mode === "sr") {
-            const dueSR = await SpacedRepetition.getDueQuestions(userId, 20);
-            if (!dueSR.length) {
-              Toast.show("No SR cards due. Try smart practice instead.", "info");
-              return;
-            }
-            const ids = dueSR.map((d) => d.id);
-            questions = await QuestionService.getByIds(ids);
-          } else if (mode === "unit") {
-            questions = await QuestionService.getQuestions({ unit });
-            if (limit && questions.length > limit) {
-              questions = questions.slice(0, limit);
-            }
-          } else if (mode === "smart") {
-            const dueSR = await SpacedRepetition.getDueQuestions(userId, 10);
-            const idsSR = dueSR.map((d) => d.id);
-            const srQuestions = idsSR.length
-              ? await QuestionService.getByIds(idsSR)
-              : [];
-            const submissions = await DataManager.listSubmissionsForStudent(
-              userId
-            );
-            const overview =
-              AnalyticsService.computeStudentOverview(submissions);
-            const unitSummary = AnalyticsService.summarizeUnits(
-              overview.unitStats
-            );
-            const weakUnits = unitSummary
-              .filter((u) => u.total >= 10)
-              .sort((a, b) => a.accuracy - b.accuracy)
-              .slice(0, 3)
-              .map((u) => u.unit);
-            let weakQuestions = [];
-            for (const wu of weakUnits) {
-              const q = await QuestionService.getQuestions({ unit: wu });
-              weakQuestions = weakQuestions.concat(q);
-            }
-            if (!srQuestions.length && !weakQuestions.length) {
-              weakQuestions = await QuestionService.getQuestions();
-            }
-            let combined = [...srQuestions, ...weakQuestions];
-            const map = new Map();
-            combined.forEach((q) => map.set(q.id, q));
-            questions = Array.from(map.values());
-            if (limit && questions.length > limit) {
-              questions = questions
-                .sort(() => Math.random() - 0.5)
-                .slice(0, limit);
-            }
-          } else {
-            questions = await QuestionService.getQuestions();
-          }
-        } catch (e) {
-          console.error("Error loading practice questions", e);
-          Toast.show("Unable to load questions. Check Firestore rules.", "error");
-          return;
-        }
-
-        if (!questions.length) {
-          Toast.show("No questions available.", "error");
-          return;
-        }
-
-        startQuizSession({ mode, questions });
+  try {
+    if (mode === "sr") {
+      // Spaced repetition due cards
+      const dueSR = await SpacedRepetition.getDueQuestions(userId, 20);
+      if (!dueSR.length) {
+        Toast.show("No SR cards due. Try smart practice instead.", "info");
+        return;
       }
+      const ids = dueSR.map((d) => d.id);
+      questions = await QuestionService.getByIds(ids);
+    } else if (mode === "unit") {
+      // Simple unit-based practice
+      questions = await QuestionService.getQuestions({ unit });
+      if (limit && questions.length > limit) {
+        questions = questions.slice(0, limit);
+      }
+    } else if (mode === "smart") {
+      // Smart mixed practice: SR + weakest units
+      const dueSR = await SpacedRepetition.getDueQuestions(userId, 10);
+      const idsSR = dueSR.map((d) => d.id);
+      const srQuestions = idsSR.length
+        ? await QuestionService.getByIds(idsSR)
+        : [];
+
+      const submissions = await DataManager.listSubmissionsForStudent(userId);
+      const overview = AnalyticsService.computeStudentOverview(submissions);
+      const unitSummary = AnalyticsService.summarizeUnits(overview.unitStats);
+
+      const weakUnits = unitSummary
+        .filter((u) => u.total >= 10)
+        .sort((a, b) => a.accuracy - b.accuracy)
+        .slice(0, 3)
+        .map((u) => u.unit);
+
+      let weakQuestions = [];
+      for (const wu of weakUnits) {
+        const q = await QuestionService.getQuestions({ unit: wu });
+        weakQuestions = weakQuestions.concat(q);
+      }
+
+      // Fallback: if nothing special, just any questions
+      if (!srQuestions.length && !weakQuestions.length) {
+        weakQuestions = await QuestionService.getQuestions();
+      }
+
+      let combined = [...srQuestions, ...weakQuestions];
+
+      // De-duplicate by id
+      const map = new Map();
+      combined.forEach((q) => {
+        if (q && q.id) {
+          map.set(q.id, q);
+        }
+      });
+      questions = Array.from(map.values());
+
+      if (limit && questions.length > limit) {
+        questions = questions
+          .sort(() => Math.random() - 0.5)
+          .slice(0, limit);
+      }
+    } else if (mode === "mistakes") {
+      // Build practice set from questions you've missed
+      const submissions = await DataManager.listSubmissionsForStudent(userId);
+      const wrongIdsSet = new Set();
+
+      (submissions || []).forEach((s) => {
+        (s.questionResults || []).forEach((qr) => {
+          if (!qr || !qr.questionId) return;
+          if (!qr.isCorrect) {
+            wrongIdsSet.add(qr.questionId);
+          }
+        });
+      });
+
+      const wrongIds = Array.from(wrongIdsSet);
+      if (!wrongIds.length) {
+        Toast.show(
+          "Great job — no missed questions to build a mistakes set from yet.",
+          "info"
+        );
+        return;
+      }
+
+      questions = await QuestionService.getByIds(wrongIds);
+      if (limit && questions.length > limit) {
+        questions = questions
+          .sort(() => Math.random() - 0.5)
+          .slice(0, limit);
+      }
+    } else if (mode === "starred") {
+      // Practice from saved/starred questions
+      const starredIds = await DataManager.listStarredQuestionIds(userId);
+      if (!starredIds.length) {
+        Toast.show(
+          "You haven't saved any questions yet. Star questions during practice to review them here.",
+          "info"
+        );
+        return;
+      }
+
+      questions = await QuestionService.getByIds(starredIds);
+      if (limit && questions.length > limit) {
+        questions = questions
+          .sort(() => Math.random() - 0.5)
+          .slice(0, limit);
+      }
+    } else {
+      // Fallback: all questions
+      questions = await QuestionService.getQuestions();
+      if (limit && questions.length > limit) {
+        questions = questions
+          .sort(() => Math.random() - 0.5)
+          .slice(0, limit);
+      }
+    }
+  } catch (e) {
+    console.error("Error loading practice questions", e);
+    Toast.show("Unable to load questions. Check Firestore rules.", "error");
+    return;
+  }
+
+  if (!questions.length) {
+    Toast.show("No questions available.", "error");
+    return;
+  }
+
+  startQuizSession({ mode, questions });
+}
 
       async function startTimedPractice({
         unitMode,
@@ -1832,39 +1927,87 @@ function renderQuiz() {
   const answered = quiz.answers[quiz.index];
 
   const wrapper = createEl("div", "space-y-3", []);
-
   const header = createEl(
     "div",
     "flex justify-between items-center text-sm text-gray-600",
-    [
-      createEl("span", "", [
-        `Question ${quiz.index + 1} of ${quiz.questions.length}`,
-      ]),
-    ]
+    []
   );
 
+  // Left side: question count
+  const left = createEl("div", "flex items-center gap-2", [
+    createEl("span", "", [
+      `Question ${quiz.index + 1} of ${quiz.questions.length}`,
+    ]),
+  ]);
+  header.appendChild(left);
+
+  // Right side: save button + timer
+  const right = createEl("div", "flex items-center gap-2", []);
+  header.appendChild(right);
+
+  // ★ Save question button
+  const saveBtn = createEl(
+    "button",
+    "inline-flex items-center px-2 py-1 rounded-full border border-amber-300 bg-amber-50 text-amber-700 text-xs hover:bg-amber-100 focus:outline-none focus:ring-1 focus:ring-amber-400",
+    ["★ Save question"]
+  );
+  saveBtn.type = "button";
+  saveBtn.setAttribute("aria-label", "Save this question to review later");
+  saveBtn.addEventListener("click", async () => {
+    if (!AppState.user || !q || !q.id) return;
+    saveBtn.disabled = true;
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = "Saved";
+    try {
+      await DataManager.addStarQuestion(AppState.user.uid, q.id);
+    } catch (e) {
+      console.error("Star question error", e);
+      Toast.show("Couldn't save this question. Try again later.", "error");
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText;
+    }
+  });
+  right.appendChild(saveBtn);
+  // Timer (if any)
   if (quiz.timeLimitMinutes) {
     const timerEl = createEl("span", "font-mono", [""]);
-    header.appendChild(timerEl);
+    timerEl.setAttribute("data-role", "quiz-timer");
+    right.appendChild(timerEl);
+
     if (!quizTimerInterval) {
       const endTime = quiz.startedAt + quiz.timeLimitMinutes * 60 * 1000;
-      quizTimerInterval = setInterval(() => {
+
+      const updateTimer = () => {
         const now = Date.now();
         const remaining = Math.max(0, endTime - now);
         const mins = Math.floor(remaining / 60000);
         const secs = Math.floor((remaining % 60000) / 1000);
-        timerEl.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+
+        // Always grab the *current* timer span in the DOM
+        const currentEl = document.querySelector(
+          "span[data-role='quiz-timer']"
+        );
+        if (currentEl) {
+          currentEl.textContent = `${mins}:${secs
+            .toString()
+            .padStart(2, "0")}`;
+        }
+
         if (remaining <= 0) {
           clearInterval(quizTimerInterval);
           quizTimerInterval = null;
           finishQuiz(true);
         }
-      }, 1000);
+      };
+
+      // Set immediately so you see the full time right away
+      updateTimer();
+      quizTimerInterval = setInterval(updateTimer, 1000);
     }
   }
-
+  
   wrapper.appendChild(header);
-
+ 
   const qCard = createEl(
     "div",
     "bg-white border border-gray-200 rounded-xl p-4 md:p-5 shadow-sm space-y-3",
@@ -1900,7 +2043,7 @@ function renderQuiz() {
     list.appendChild(btn);
   });
 
-  qCard.appendChild(list);
+   qCard.appendChild(list);
   wrapper.appendChild(qCard);
 
   const controls = createEl(
@@ -1914,6 +2057,7 @@ function renderQuiz() {
     "px-3 py-1.5 rounded-lg border border-gray-300 text-xs md:text-sm bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
     ["Previous"]
   );
+  prevBtn.setAttribute("aria-label", "Previous question");
   prevBtn.disabled = quiz.index === 0;
   prevBtn.addEventListener("click", () => {
     if (quiz.index > 0) {
@@ -1927,6 +2071,7 @@ function renderQuiz() {
     "px-3 py-1.5 rounded-lg border border-gray-300 text-xs md:text-sm bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
     ["Next"]
   );
+  nextBtn.setAttribute("aria-label", "Next question");
   nextBtn.disabled = quiz.index === quiz.questions.length - 1;
   nextBtn.addEventListener("click", () => {
     if (quiz.index < quiz.questions.length - 1) {
@@ -1940,6 +2085,7 @@ function renderQuiz() {
     "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs md:text-sm rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
     ["Finish"]
   );
+  finishBtn.setAttribute("aria-label", "Finish quiz and view results");
   finishBtn.addEventListener("click", () => {
     if (
       confirm(
@@ -1958,7 +2104,6 @@ function renderQuiz() {
   content.innerHTML = "";
   content.appendChild(wrapper);
 }
-
 async function finishQuiz(autoFromTimer) {
         const quiz = AppState.currentQuiz;
         if (!quiz) return;
@@ -2203,19 +2348,28 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             ]),
           ])
         );
+const streak =
+  overview &&
+  overview.stats &&
+  typeof overview.stats.streak === "number"
+    ? overview.stats.streak
+    : 0;
+const topRow = createEl(
+  "div",
+  "grid grid-cols-1 md:grid-cols-3 gap-3",
+  [
+    statCard(
+      "Overall accuracy",
+      pct === "—" ? "—" : pct + "%"
+    ),
+    statCard("AP score prediction", "≈ " + ap),
+    statCard(
+      "Recent streak",
+      streak ? streak + " in a row" : "Start a streak"
+    ),
+  ]
+);
 
-        const topRow = createEl(
-          "div",
-          "grid grid-cols-1 md:grid-cols-3 gap-3",
-          [
-            statCard(
-              "Overall accuracy",
-              pct === "—" ? "—" : pct + "%"
-            ),
-            statCard("AP score prediction", "≈ " + ap),
-            statCard("SR cards mastered", srStats.mastered || 0),
-          ]
-        );
         wrapper.appendChild(topRow);
 
         const action = computeNextBestAction({
@@ -2260,9 +2414,11 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       }
 async function renderStudentClasses() {
   const content = $("tab-content");
-  content.innerHTML = "";
+  content.innerHTML =
+    "<p class='text-sm text-gray-500'>Loading classes…</p>";
 
   const wrapper = createEl("div", "space-y-3", []);
+
   wrapper.appendChild(
     createEl("h2", "text-sm font-semibold text-gray-900", ["Classes"])
   );
@@ -2905,6 +3061,54 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
           grid.appendChild(card);
         })();
+        // Practice from mistakes
+(function () {
+  const card = createEl(
+    "div",
+    "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+    []
+  );
+  card.appendChild(
+    createEl("p", "text-xs font-semibold text-gray-900", [
+      "Practice from my mistakes",
+    ])
+  );
+  card.appendChild(
+    createEl("p", "text-sm text-gray-600", [
+      "Build a practice set from questions you've missed in past assignments.",
+    ])
+  );
+
+  const row = createEl("div", "flex items-center gap-2 text-sm", []);
+  row.appendChild(
+    createEl("span", "text-sm text-gray-600", ["Questions:"])
+  );
+  const countInput = createEl(
+    "input",
+    "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm",
+    []
+  );
+  countInput.type = "number";
+  countInput.min = "5";
+  countInput.max = "30";
+  countInput.value = "10";
+  row.appendChild(countInput);
+  card.appendChild(row);
+
+  const btn = createEl(
+  "button",
+  "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+  ["Start mistakes set"]
+);
+
+  btn.addEventListener("click", () => {
+    const limit = Number(countInput.value || 10);
+    startPractice({ mode: "mistakes", limit });
+  });
+  card.appendChild(btn);
+
+  grid.appendChild(card);
+})();
 
         // Spaced repetition
         (function () {
@@ -2958,7 +3162,54 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
           grid.appendChild(card);
         })();
+// Saved questions practice
+(function () {
+  const card = createEl(
+    "div",
+    "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+    []
+  );
+  card.appendChild(
+    createEl("p", "text-xs font-semibold text-gray-900", [
+      "Saved questions",
+    ])
+  );
+  card.appendChild(
+    createEl("p", "text-sm text-gray-600", [
+      "Review questions you've saved during practice and assignments.",
+    ])
+  );
 
+  const row = createEl("div", "flex items-center gap-2 text-sm", []);
+  row.appendChild(
+    createEl("span", "text-sm text-gray-600", ["Questions:"])
+  );
+  const countInput = createEl(
+    "input",
+    "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm",
+    []
+  );
+  countInput.type = "number";
+  countInput.min = "5";
+  countInput.max = "30";
+  countInput.value = "10";
+  row.appendChild(countInput);
+  card.appendChild(row);
+
+  const btn = createEl(
+  "button",
+  "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+  ["Start saved set"]
+);
+
+  btn.addEventListener("click", () => {
+    const limit = Number(countInput.value || 10);
+    startPractice({ mode: "starred", limit });
+  });
+  card.appendChild(btn);
+
+  grid.appendChild(card);
+})();
         // Timed practice
         (function () {
           const card = createEl(
