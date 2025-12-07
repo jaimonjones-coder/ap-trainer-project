@@ -356,7 +356,22 @@
       }
       const auth = firebase.auth();
       const db = firebase.firestore();
-
+// Enable offline persistence (Firestore v8 style)
+if (db && db.enablePersistence) {
+  db.enablePersistence().catch(function (err) {
+    if (err.code === "failed-precondition") {
+      console.warn(
+        "Offline persistence failed: multiple tabs open. Only one tab can have persistence at a time."
+      );
+    } else if (err.code === "unimplemented") {
+      console.warn(
+        "Offline persistence is not available in this browser."
+      );
+    } else {
+      console.warn("Offline persistence error", err);
+    }
+  });
+}
       // ---------------- Helpers ----------------
       function $(id) {
         return document.getElementById(id);
@@ -456,19 +471,37 @@ function createElHTML(tag, className = "", html = "") {
 
   return wrapper;
 }
+function formatDateTimeISO(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-        
-      function formatDateTimeISO(iso) {
-        if (!iso) return "—";
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return "—";
-        return d.toLocaleString(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      }
+function formatShortDateTime(input) {
+  if (!input) return "—";
+
+  const d =
+    input && typeof input.toDate === "function"
+      ? input.toDate()
+      : input instanceof Date
+      ? input
+      : new Date(input);
+
+  if (isNaN(d.getTime())) return "—";
+
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
       const AP_UNITS = [
         "Scientific Foundations of Psychology",
@@ -499,11 +532,12 @@ function createElHTML(tag, className = "", html = "") {
           { id: "analytics", label: "Analytics" },
         ],
         teacher: [
-          { id: "dashboard", label: "Dashboard" },
-          { id: "classes", label: "Classes" },
-          { id: "assignments", label: "Assignments" },
-          { id: "results", label: "Results" },
-        ],
+  { id: "dashboard", label: "Dashboard" },
+  { id: "classes", label: "Classes" },
+  { id: "assignments", label: "Assignments" },
+  { id: "grades", label: "Grades" },
+  { id: "results", label: "Analytics" },
+],
       };
 
       // ---------------- Data Manager ----------------
@@ -859,103 +893,306 @@ async listAssignmentsForTeacher(teacherId) {
           return seed.filter((q) => !unitFilter || q.unit === unitFilter);
         },
       };
+    // --- Mastery helpers for analytics (student UI) ---
+function getMasteryBand(accuracy) {
+  if (accuracy == null || isNaN(accuracy)) return "none";
+  if (accuracy >= 0.8) return "high";
+  if (accuracy >= 0.6) return "medium";
+  return "low";
+}
 
-      // ---------------- Analytics Service ----------------
-      const AnalyticsService = {
-        computeStudentOverview(submissions) {
-          if (!submissions || !submissions.length) {
-            return {
-              stats: { answered: 0, correct: 0, streak: 0 },
-              avgScore: 0,
-              apPrediction: 1,
-              unitStats: {},
-            };
-          }
-          let answered = 0;
-          let correct = 0;
-          const unitStats = {};
-          const scores = [];
-
-          submissions.forEach((s) => {
-            const total = s.totalQuestions || s.numQuestions || 0;
-            const corr = s.correctCount || s.numCorrect || 0;
-            answered += total;
-            correct += corr;
-            const score =
-              typeof s.scorePercent === "number"
-                ? s.scorePercent
-                : total
-                ? (corr / total) * 100
-                : null;
-            if (score != null) scores.push(score);
-
-            const perUnit = s.perUnit || {};
-            Object.entries(perUnit).forEach(([unit, data]) => {
-              const uKey = Number(unit);
-              if (!unitStats[uKey]) {
-                unitStats[uKey] = { answered: 0, correct: 0 };
-              }
-              unitStats[uKey].answered += data.answered || 0;
-              unitStats[uKey].correct += data.correct || 0;
-            });
-          });
-
-          const avgScore =
-            scores.length > 0
-              ? scores.reduce((a, b) => a + b, 0) / scores.length
-              : 0;
-
-          let apPrediction = 1;
-          if (avgScore >= 85) apPrediction = 5;
-          else if (avgScore >= 70) apPrediction = 4;
-          else if (avgScore >= 60) apPrediction = 3;
-          else if (avgScore >= 45) apPrediction = 2;
-          else apPrediction = 1;
-
-          const streak = (() => {
-            const sorted = submissions
-              .slice()
-              .sort(
-                (a, b) =>
-                  new Date(a.completedAt || 0) - new Date(b.completedAt || 0)
-              )
-              .slice(-10);
-            let s = 0;
-            for (let i = sorted.length - 1; i >= 0; i--) {
-              const sub = sorted[i];
-              const total = sub.totalQuestions || sub.numQuestions || 0;
-              const corr = sub.correctCount || sub.numCorrect || 0;
-              const pct =
-                total > 0
-                  ? (corr / total) * 100
-                  : sub.scorePercent || 0;
-              if (pct >= 60) s++;
-              else break;
-            }
-            return s;
-          })();
-
-          return {
-            stats: { answered, correct, streak },
-            avgScore,
-            apPrediction,
-            unitStats,
-          };
+function masteryBandToColor(band) {
+  switch (band) {
+    case "high":
+      return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    case "medium":
+      return "bg-amber-100 text-amber-800 border-amber-200";
+    case "low":
+      return "bg-rose-100 text-rose-800 border-rose-200";
+    default:
+      return "bg-gray-100 text-gray-500 border-gray-200";
+  }
+};
+// ---------------- Analytics Service ----------------
+const AnalyticsService = {
+  computeStudentOverview(submissions) {
+    // No submissions: keep new stats shape but also return top-level avgScore + numeric apPrediction
+    if (!submissions || !submissions.length) {
+      return {
+        stats: {
+          answered: 0,
+          correct: 0,
+          avgScore: 0,
+          lastScore: null,
+          attempts: 0,
+          streak: 0,
         },
-
-        summarizeUnits(unitStats) {
-          return Object.entries(unitStats).map(([unit, data]) => ({
-            unit: Number(unit),
-            total: data.answered || 0,
-            accuracy: data.answered > 0 ? data.correct / data.answered : 0,
-          }));
-        },
+        avgScore: 0,        // for old call sites (overview.avgScore)
+        apPrediction: null, // typeof === "number" will be false → UI shows "—"
+        unitStats: {},
+        skillStats: {},     // per-skill stats
       };
+    }
+
+    const stats = {
+      answered: 0,
+      correct: 0,
+      avgScore: 0,
+      lastScore: null,
+      attempts: submissions.length,
+      streak: 0,
+    };
+
+    const unitStats = {};
+    const skillStats = {};
+
+    let totalScore = 0;
+    let lastCompletedAt = null;
+    let lastScore = null;
+
+    submissions.forEach((s) => {
+      // Prefer scorePercent; fall back to counts if needed
+      let score = typeof s.scorePercent === "number" ? s.scorePercent : 0;
+      if (!score) {
+        const total = s.totalQuestions || s.numQuestions || 0;
+        const corr = s.correctCount || s.numCorrect || 0;
+        score = total > 0 ? (corr / total) * 100 : 0;
+      }
+
+      totalScore += score;
+
+      // Track most recent completed submission for lastScore
+      const completedAt = s.completedAt;
+      const completedMillis = completedAt?.toMillis
+        ? completedAt.toMillis()
+        : completedAt
+        ? new Date(completedAt).getTime()
+        : 0;
+
+      if (!lastCompletedAt || completedMillis > lastCompletedAt) {
+        lastCompletedAt = completedMillis;
+        lastScore = score;
+      }
+
+      // Aggregate global answered/correct
+      const totalQ = s.totalQuestions || s.numQuestions || 0;
+      const corrQ = s.correctCount || s.numCorrect || 0;
+      stats.answered += totalQ;
+      stats.correct += corrQ;
+
+      // Per-unit stats
+      const perUnit = s.perUnit || {};
+      Object.keys(perUnit).forEach((uKey) => {
+        const u = perUnit[uKey] || {};
+        if (!unitStats[uKey]) {
+          unitStats[uKey] = { answered: 0, correct: 0 };
+        }
+        unitStats[uKey].answered += u.answered || 0;
+        unitStats[uKey].correct += u.correct || 0;
+      });
+
+      // Per-skill stats
+      const qResults = s.questionResults || [];
+      qResults.forEach((qr) => {
+        const skill = qr.skill || null;
+        if (!skill) return;
+        if (!skillStats[skill]) {
+          skillStats[skill] = { answered: 0, correct: 0 };
+        }
+        skillStats[skill].answered += 1;
+        if (qr.isCorrect) {
+          skillStats[skill].correct += 1;
+        }
+      });
+    });
+
+    stats.lastScore = lastScore;
+    const avgScore = submissions.length ? totalScore / submissions.length : 0;
+    stats.avgScore = avgScore;
+
+    const pct =
+      stats.answered > 0 ? (stats.correct / stats.answered) * 100 : 0;
+
+    // numeric AP prediction (backward compatible with places expecting a number)
+    let apPrediction = 1;
+    if (pct >= 90) apPrediction = 5;
+    else if (pct >= 80) apPrediction = 4;
+    else if (pct >= 65) apPrediction = 3;
+    else if (pct >= 50) apPrediction = 2;
+
+    // Streak: consecutive submissions with score ≥ 70%, most recent first
+    const streak = (() => {
+      const sorted = submissions
+        .slice()
+        .sort((a, b) => {
+          const aTime = a.completedAt?.toMillis
+            ? a.completedAt.toMillis()
+            : new Date(a.completedAt || 0).getTime();
+          const bTime = b.completedAt?.toMillis
+            ? b.completedAt.toMillis()
+            : new Date(b.completedAt || 0).getTime();
+          return bTime - aTime; // most recent first
+        });
+
+      let count = 0;
+      for (const s of sorted) {
+        let score = typeof s.scorePercent === "number" ? s.scorePercent : 0;
+        if (!score) {
+          const total = s.totalQuestions || s.numQuestions || 0;
+          const corr = s.correctCount || s.numCorrect || 0;
+          score = total > 0 ? (corr / total) * 100 : 0;
+        }
+        if (score >= 70) count++;
+        else break;
+      }
+      return count;
+    })();
+
+    stats.streak = streak;
+
+    return {
+      stats,
+      avgScore,     // top-level like V122
+      apPrediction, // number 1–5
+      unitStats,
+      skillStats,
+    };
+  },
+
+  summarizeUnits(unitStats) {
+    if (!unitStats) return [];
+    const result = [];
+    Object.keys(unitStats).forEach((key) => {
+      const u = unitStats[key] || {};
+      const answered = u.answered || 0;
+      const correct = u.correct || 0;
+      const accuracy = answered > 0 ? correct / answered : 0;
+      const unitNumber = Number(key);
+      result.push({
+        unit: unitNumber,
+        total: answered, // keeps V122 shape (uses .total)
+        answered,
+        correct,
+        accuracy,
+      });
+    });
+    result.sort((a, b) => a.unit - b.unit);
+    return result;
+  },
+};
+   // --- Assignment status computation (teacher + student views) ---
+function buildAssignmentStatusMap(classes, assignments, submissions) {
+  const now = Date.now();
+
+  const classStudentIds = {};
+  (classes || []).forEach((c) => {
+    const set = new Set();
+    (c.studentIds || []).forEach((id) => set.add(id));
+    (c.students || []).forEach((s) => {
+      if (s && s.id) set.add(s.id);
+    });
+    classStudentIds[c.id] = set;
+  });
+
+  // Latest submission per (assignment, student)
+  const latestByKey = {};
+  (submissions || []).forEach((s) => {
+    const aId = s.assignmentId;
+    const uId = s.userId || s.studentId;
+    if (!aId || !uId) return;
+    const key = `${aId}__${uId}`;
+
+    const tsRaw =
+      s.completedAt?.toMillis?.() ??
+      (s.completedAt ? new Date(s.completedAt).getTime() : 0);
+    const ts = isNaN(tsRaw) ? 0 : tsRaw;
+
+    const prev = latestByKey[key];
+    if (!prev || ts > prev._ts) {
+      latestByKey[key] = Object.assign({ _ts: ts }, s);
+    }
+  });
+
+  const statusByAssignment = {};
+
+  (assignments || []).forEach((a) => {
+    const set = classStudentIds[a.classId] || new Set();
+    const perStudent = {};
+    const counts = {
+      notStarted: 0,
+      completedOnTime: 0,
+      completedLate: 0,
+      missing: 0,
+    };
+
+    const dueTsRaw = a.dueAt ? new Date(a.dueAt).getTime() : null;
+    const dueTs = dueTsRaw && !isNaN(dueTsRaw) ? dueTsRaw : null;
+
+    set.forEach((studentId) => {
+      const key = `${a.id}__${studentId}`;
+      const sub = latestByKey[key];
+      let status = "notStarted";
+      let lastSubmission = null;
+
+      if (!sub) {
+        if (dueTs && dueTs < now) {
+          status = "missing";
+        }
+      } else {
+        lastSubmission = sub;
+        const completedTs =
+          sub.completedAt?.toMillis?.() ??
+          (sub.completedAt ? new Date(sub.completedAt).getTime() : 0);
+        const isLate =
+          dueTs && !isNaN(completedTs) && completedTs > dueTs;
+        status = isLate ? "completedLate" : "completedOnTime";
+      }
+
+      perStudent[studentId] = {
+        status,
+        lastSubmission,
+      };
+
+      if (status === "completedOnTime") counts.completedOnTime++;
+      else if (status === "completedLate") counts.completedLate++;
+      else if (status === "missing") counts.missing++;
+      else counts.notStarted++;
+    });
+
+    statusByAssignment[a.id] = {
+      perStudent,
+      counts,
+    };
+  });
+
+  return statusByAssignment;
+}
+
+function humanizeAssignmentStatus(status) {
+  switch (status) {
+    case "completedOnTime":
+      return "Completed (on time)";
+    case "completedLate":
+      return "Completed (late)";
+    case "missing":
+      return "Missing";
+    case "notStarted":
+    default:
+      return "Not started";
+  }
+}
+
 let studentProgressModalInitialized = false;
+
 const TeacherResultsState = {
   classes: [],
   assignments: [],
   submissions: [],
+  focusAssignmentId: null,
+};
+
+const TeacherGradesState = {
+  selectedClassId: null,
 };
 
 function ensureStudentProgressModalEvents() {
@@ -971,7 +1208,6 @@ function ensureStudentProgressModalEvents() {
     }
   });
 }
-
 function closeStudentProgressModal() {
   const overlay = $("student-progress-overlay");
   if (!overlay) return;
@@ -1683,6 +1919,161 @@ async function openQuestionLibrary() {
       }
 
      // ---------------- Practice + Quiz Engine ----------------
+async function startFullExam() {
+  const userId = AppState.user?.uid;
+  if (!userId) {
+    Toast.show("Please sign in to start the full exam.", "info");
+    return;
+  }
+
+  try {
+    let questions = await QuestionService.getQuestions();
+    if (!questions || !questions.length) {
+      Toast.show("No questions available for a full exam.", "error");
+      return;
+    }
+
+    // Shuffle and take 60
+    questions = questions
+      .slice()
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 60);
+
+    const pseudoAssignment = {
+      id: `full_mc_${Date.now()}`,
+      title: "Full MC Exam Simulation",
+      classId: null,
+      type: "fullExam",
+      timeLimitMinutes: 70,
+      isPractice: true,
+    };
+
+    startQuizSession({
+      mode: "fullExam",
+      assignment: pseudoAssignment,
+      questions,
+      timeLimitMinutes: 70,
+    });
+  } catch (e) {
+    console.error("Full exam error", e);
+    Toast.show(
+      "Unable to start full exam. Check Firestore rules or question bank.",
+      "error"
+    );
+  }
+} 
+// Launch a unit practice set directly from analytics
+async function launchUnitPracticeFromAnalytics(unit) {
+  try {
+    let questions = await QuestionService.getQuestions({ unit });
+    if (!questions || !questions.length) {
+      Toast.show(
+        `No questions available yet for Unit ${unit}.`,
+        "error"
+      );
+      return;
+    }
+
+    // Shuffle a little and cap to something reasonable
+    questions = [...questions].sort(() => Math.random() - 0.5);
+    if (questions.length > 20) {
+      questions = questions.slice(0, 20);
+    }
+
+    const pseudoAssignment = {
+      id: `analytics_unit_${unit}_${Date.now()}`,
+      title: `Unit ${unit} practice (from Analytics)`,
+      classId: null,
+      type: "unit",
+      units: [unit],
+      isPractice: true,
+    };
+
+    startQuizSession({
+      mode: "unit",
+      assignment: pseudoAssignment,
+      questions,
+    });
+  } catch (e) {
+    console.error("launchUnitPracticeFromAnalytics error", e);
+    Toast.show("Could not start unit practice.", "error");
+  }
+}
+
+async function launchMistakesSessionFromAnalytics() {
+  if (!AppState.user) return;
+  try {
+    // If you already have a mistakes-only mode, reuse it
+    if (typeof startMistakesOnlySession === "function") {
+      await startMistakesOnlySession();
+      return;
+    }
+
+    // Fallback: build a mistakes-only quiz from recent submissions
+    const subs = await DataManager.listSubmissionsForStudent(
+      AppState.user.uid
+    );
+    const questionIds = new Set();
+    (subs || []).forEach((s) => {
+      (s.questionResults || []).forEach((qr) => {
+        if (!qr.isCorrect && qr.questionId) {
+          questionIds.add(qr.questionId);
+        }
+      });
+    });
+
+    const ids = Array.from(questionIds);
+    if (!ids.length) {
+      Toast.show("No missed questions to review yet.", "info");
+      return;
+    }
+
+    let questions = await QuestionService.getByIds(ids);
+    questions = questions.filter(Boolean);
+    if (!questions.length) {
+      Toast.show(
+        "No question details available for missed items.",
+        "info"
+      );
+      return;
+    }
+
+    questions = [...questions].sort(() => Math.random() - 0.5);
+    if (questions.length > 15) {
+      questions = questions.slice(0, 15);
+    }
+
+    const pseudoAssignment = {
+      id: `mistakes_${Date.now()}`,
+      title: "Mistakes-only drill",
+      classId: null,
+      type: "mistakes",
+      isPractice: true,
+    };
+
+    startQuizSession({
+      mode: "mistakes",
+      assignment: pseudoAssignment,
+      questions,
+    });
+  } catch (e) {
+    console.error("launchMistakesSessionFromAnalytics error", e);
+    Toast.show("Could not start a mistakes-only session.", "error");
+  }
+}
+
+function launchSRFromAnalytics() {
+  // If you already have a dedicated SR entrypoint, call that.
+  if (typeof startSpacedRepetitionSession === "function") {
+    startSpacedRepetitionSession();
+    return;
+  }
+
+  // Otherwise just send them to Practice tab – your SR card is already there
+  AppState.currentTab = "practice";
+  renderTabs();
+  renderCurrentTab();
+}
 async function startPractice({ mode, unit, limit }) {
   const userId = AppState.user.uid;
   let questions = [];
@@ -2139,7 +2530,6 @@ async function finishQuiz(autoFromTimer) {
               console.error("SR update error", e);
             }
           }
-
           questionResults.push({
             questionId: q.id,
             question: q.question,
@@ -2150,6 +2540,7 @@ async function finishQuiz(autoFromTimer) {
             explanation: q.explanation || "",
             distractorNotes: q.distractorNotes || null,
             unit: q.unit || null,
+            skill: q.skill || null,
           });
         }
 
@@ -2672,44 +3063,76 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             const scoreLabel =
               lastScore == null ? "Not attempted yet" : `${Math.round(lastScore)}%`;
 
-            const dueISO = a.dueAt || null;
-            const dueLabel = dueISO ? formatDateTimeISO(dueISO) : "No due date";
-            const now = Date.now();
-            const dueTs = dueISO ? new Date(dueISO).getTime() : null;
-            let status = "Active";
-            if (dueTs && dueTs < now) status = "Overdue";
+           const dueISO = a.dueAt || null;
+const dueLabel = dueISO ? formatDateTimeISO(dueISO) : "No due date";
 
-            const card = createEl(
-              "div",
-              "bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3 shadow-sm",
-              []
-            );
-            const left = createEl("div", "space-y-1", [
-              createEl("p", "text-xs font-semibold text-gray-900", [
-                a.title || "Assignment",
-              ]),
-              createEl("p", "text-sm text-gray-500", [
-                `${a.questionCount || 10} Q • ${
-                  a.timeLimitMinutes ? a.timeLimitMinutes + " min" : "No limit"
-                }`,
-              ]),
-              createEl("p", "text-sm text-gray-500", [
-                "Due: " + dueLabel,
-              ]),
-              createEl("p", "text-sm text-gray-500", [
-                "Last score: " + scoreLabel,
-              ]),
-            ]);
+const card = createEl(
+  "div",
+  "flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm",
+  []
+);
 
-            const statusPill = createEl(
-              "span",
-              "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium " +
-                (status === "Active"
-                  ? "bg-green-50 text-green-700 border border-green-200"
-                  : "bg-red-50 text-red-700 border border-red-200"),
-              [status]
-            );
-            left.appendChild(statusPill);
+const left = createEl("div", "space-y-1", [
+  createEl("div", "flex items-center gap-2", [
+    createEl("h3", "text-sm font-semibold text-gray-900", [
+      a.title || "Untitled assignment",
+    ]),
+    a.className
+      ? createEl("span", "text-[11px] text-gray-500", [`(${a.className})`])
+      : null,
+  ]),
+  createEl("p", "text-xs text-gray-500", [
+    a.numQuestions
+      ? `${a.numQuestions} question${
+          a.numQuestions === 1 ? "" : "s"
+        }`
+      : "Questions not specified",
+  ]),
+  createEl("p", "text-[11px] text-gray-500", [
+    dueLabel ? `Due: ${dueLabel}` : "No due date",
+  ]),
+]);
+
+// --- NEW status pill based on submissions + due date ---
+const statusRow = createEl(
+  "div",
+  "mt-1 flex items-center gap-1",
+  []
+);
+
+let status = "Not started";
+
+if (lastSub) {
+  const completedTs =
+    lastSub.completedAt?.toMillis?.() ??
+    (lastSub.completedAt
+      ? new Date(lastSub.completedAt).getTime()
+      : 0);
+  const dueTs = a.dueAt ? new Date(a.dueAt).getTime() : null;
+  const isLate =
+    dueTs && !isNaN(completedTs) && completedTs > dueTs;
+  status = isLate ? "Completed (late)" : "Completed";
+} else if (a.dueAt) {
+  const dueTs = new Date(a.dueAt).getTime();
+  if (!isNaN(dueTs) && dueTs < Date.now()) {
+    status = "Missing";
+  }
+}
+
+const pillClass =
+  status.indexOf("Completed") === 0
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : status === "Missing"
+    ? "bg-rose-50 text-rose-700 border-rose-200"
+    : "bg-gray-50 text-gray-600 border-gray-200";
+
+const pill = createEl(
+  "span",
+  `inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] ${pillClass}`,
+  [status]
+);
+statusRow.appendChild(pill);
+left.appendChild(statusRow);
 
             const right = createEl("div", "flex gap-2 items-center", []);
             const startBtn = createEl(
@@ -2798,125 +3221,385 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         content.innerHTML = "";
         content.appendChild(wrapper);
       }
+async function renderStudentAnalytics() {
+  const content = $("tab-content");
+  content.innerHTML =
+    "<p class='text-sm text-gray-500'>Loading analytics…</p>";
+  const userId = AppState.user.uid;
 
-      async function renderStudentAnalytics() {
-        const content = $("tab-content");
-        content.innerHTML =
-          "<p class='text-sm text-gray-500'>Loading analytics…</p>";
-        const userId = AppState.user.uid;
+  let submissions = [];
+  let srStats = { totalCards: 0, dueNow: 0, dueSoon: 0, mastered: 0 };
 
-        let submissions = [];
-        let srStats = { totalCards: 0, dueNow: 0, dueSoon: 0, mastered: 0 };
-        try {
-          const [subs, sr] = await Promise.all([
-            DataManager.listSubmissionsForStudent(userId),
-            SpacedRepetition.getStats(userId),
-          ]);
-          submissions = subs || [];
-          srStats = sr || srStats;
-        } catch (e) {
-          console.error("Student analytics error", e);
-          Toast.show(
-            "Analytics could not fully load (check Firestore rules).",
-            "error"
-          );
-        }
+  try {
+    const [subs, sr] = await Promise.all([
+      DataManager.listSubmissionsForStudent(userId),
+      SpacedRepetition.getStats(userId),
+    ]);
+    submissions = subs || [];
+    srStats = sr || srStats;
+  } catch (e) {
+    console.error("Student analytics error", e);
+    Toast.show(
+      "Analytics could not fully load (check Firestore rules).",
+      "error"
+    );
+  }
 
-        const overview = AnalyticsService.computeStudentOverview(submissions);
-        const unitSummary = AnalyticsService.summarizeUnits(
-          overview.unitStats
-        );
-        const stats = overview.stats;
-        const answered = stats.answered || 0;
-        const correct = stats.correct || 0;
-        const pct =
-          answered > 0 ? Math.round((correct / answered) * 100) : "—";
-        const ap = overview.apPrediction || "—";
+  const overview = AnalyticsService.computeStudentOverview(submissions);
+  const unitSummary = AnalyticsService.summarizeUnits(overview.unitStats);
+  const skillStats = overview.skillStats || {};
+  const stats = overview.stats;
 
-        const wrapper = createEl("div", "space-y-4", []);
-        wrapper.appendChild(
-          createEl("div", "flex items-center justify-between", [
-            createEl("div", "", [
-              createEl("h1", "text-sm font-semibold text-gray-900", [
-                "Analytics & Insights",
-              ]),
-              createEl("p", "text-sm text-gray-600", [
-                "See how you’re doing by unit and overall.",
-              ]),
-            ]),
-          ])
-        );
+  const answered = stats.answered || 0;
+  const correct = stats.correct || 0;
+  const pct =
+    answered > 0 ? Math.round((correct / answered) * 100) : "—";
+  const ap = overview.apPrediction == null ? "—" : overview.apPrediction;
 
-        const topRow = createEl(
-          "div",
-          "grid grid-cols-1 md:grid-cols-4 gap-3",
+  const wrapper = createEl("div", "space-y-4", []);
+
+  // Heading
+  wrapper.appendChild(
+    createEl("div", "flex items-center justify-between", [
+      createEl("div", "", [
+        createEl("h1", "text-sm font-semibold text-gray-900", [
+          "Analytics & Insights",
+        ]),
+        createEl("p", "text-sm text-gray-600", [
+          "See how you’re doing by unit and get concrete next steps.",
+        ]),
+      ]),
+    ])
+  );
+
+  // Top stats row
+  const topRow = createEl(
+    "div",
+    "grid grid-cols-1 md:grid-cols-4 gap-3",
+    [
+      statCard("Overall accuracy", pct === "—" ? "—" : pct + "%"),
+      statCard("AP score prediction", "≈ " + ap),
+      statCard("Questions answered", answered),
+      statCard("SR cards due now", srStats.dueNow || 0),
+    ]
+  );
+  wrapper.appendChild(topRow);
+
+  // ---------- Unit heatmap ----------
+  const heatmapCard = createEl(
+    "div",
+    "rounded-xl border border-gray-200 bg-white p-3 space-y-2",
+    []
+  );
+
+  heatmapCard.appendChild(
+    createEl("div", "flex items-center justify-between", [
+      createEl("div", "", [
+        createEl("h2", "text-xs font-semibold text-gray-900", [
+          "Unit mastery heatmap",
+        ]),
+        createEl("p", "text-xs text-gray-500", [
+          "Green = strong · Yellow = okay · Red = needs work",
+        ]),
+      ]),
+    ])
+  );
+
+  const heatRow = createEl(
+    "div",
+    "flex flex-wrap gap-1 mt-1",
+    []
+  );
+
+  const unitMap = {};
+  unitSummary.forEach((u) => {
+    unitMap[u.unit] = u;
+  });
+  
+const units =
+  typeof AP_UNITS !== "undefined" && Array.isArray(AP_UNITS)
+    ? Array.from({ length: AP_UNITS.length }, (_, i) => i + 1)
+    : Array.from({ length: 9 }, (_, i) => i + 1);
+  
+
+  units.forEach((unit) => {
+    const u = unitMap[unit] || { answered: 0, correct: 0, accuracy: null };
+    const accuracy =
+      u.answered > 0 ? (u.correct / u.answered) : null;
+    const band = u.answered > 0 ? getMasteryBand(accuracy) : "none";
+    const pill = createEl(
+      "button",
+      [
+        "flex flex-col items-center justify-center w-10 h-10 rounded-lg border text-[10px] font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors",
+        masteryBandToColor(band),
+      ].join(" "),
+      [
+        createEl("span", "text-[10px] leading-3", [`U${unit}`]),
+        createEl(
+          "span",
+          "text-[10px] leading-3",
           [
-            statCard(
-              "Overall accuracy",
-              pct === "—" ? "—" : pct + "%"
-            ),
-            statCard("AP score prediction", "≈ " + ap),
-            statCard("Questions answered", answered),
-            statCard("SR cards due now", srStats.dueNow || 0),
+            u.answered > 0
+              ? Math.round((u.correct / Math.max(1, u.answered)) * 100) + "%"
+              : "—",
           ]
-        );
-        wrapper.appendChild(topRow);
+        ),
+      ]
+    );
+    pill.type = "button";
 
-        const unitCard = createEl(
-          "div",
-          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
-          []
-        );
-        unitCard.appendChild(
-          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
-            "By-unit accuracy",
-          ])
-        );
-        if (!unitSummary.length) {
-          unitCard.appendChild(
-            createEl("p", "text-sm text-gray-500", [
-              "Once you’ve done more practice, you’ll see which units are strongest and weakest.",
-            ])
-          );
-        } else {
-          unitSummary.forEach((u) => {
-            unitCard.appendChild(
-              unitBar(
-                u.unit,
-                u.accuracy,
-                u.total,
-                u.accuracy >= 0.7 ? "bg-green-600" : "bg-amber-500"
-              )
-            );
-          });
-        }
-        wrapper.appendChild(unitCard);
+    // Click → seed a unit practice session
+    pill.addEventListener("click", () => {
+      launchUnitPracticeFromAnalytics(unit);
+    });
 
-        const srCard = createEl(
-          "div",
-          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
-          []
-        );
-        srCard.appendChild(
-          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
-            "Spaced repetition",
-          ])
-        );
-        srCard.appendChild(
-          createEl("p", "text-sm text-gray-600", [
-            `Total cards: ${srStats.totalCards || 0} · Due now: ${
-              srStats.dueNow || 0
-            } · Due soon: ${srStats.dueSoon || 0} · Mastered: ${
-              srStats.mastered || 0
-            }`,
-          ])
-        );
-        wrapper.appendChild(srCard);
+    heatRow.appendChild(pill);
+  });
 
-        content.innerHTML = "";
-        content.appendChild(wrapper);
+  heatmapCard.appendChild(heatRow);
+  wrapper.appendChild(heatmapCard);
+
+  // ---------- “Next steps” card ----------
+  const nextStepsCard = createEl(
+    "div",
+    "rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-2",
+    []
+  );
+
+  nextStepsCard.appendChild(
+    createEl("div", "flex items-center justify-between", [
+      createEl("div", "", [
+        createEl("h2", "text-xs font-semibold text-blue-900", [
+          "Next steps",
+        ]),
+        createEl("p", "text-xs text-blue-800", [
+          "A few concrete moves based on your data.",
+        ]),
+      ]),
+    ])
+  );
+
+  const suggestionsList = createEl("ul", "space-y-1", []);
+  const suggestions = [];
+
+  // Priority: SR due
+  if ((srStats.dueNow || 0) > 0) {
+    suggestions.push({
+      label: `⏰ Clear your ${srStats.dueNow} SR cards due today.`,
+      action: "sr",
+    });
+  }
+
+  // Red units with at least 5 answered
+  const redUnits = unitSummary
+    .filter((u) => u.answered >= 5)
+    .filter((u) => {
+      const acc = u.correct / Math.max(1, u.answered);
+      return getMasteryBand(acc) === "low";
+    })
+    .sort((a, b) => {
+      const aa = a.correct / Math.max(1, a.answered);
+      const bb = b.correct / Math.max(1, b.answered);
+      return aa - bb;
+    });
+
+  if (redUnits.length) {
+    const u = redUnits[0];
+    const acc = Math.round((u.correct / Math.max(1, u.answered)) * 100);
+    suggestions.push({
+      label: `🔥 Start a Unit ${u.unit} practice set (about ${acc}% accuracy over ${u.answered} questions).`,
+      action: "unit",
+      unit: u.unit,
+    });
+  }
+
+  // Yellow “reinforce” units
+  const yellowUnits = unitSummary
+    .filter((u) => u.answered >= 5)
+    .filter((u) => {
+      const acc = u.correct / Math.max(1, u.answered);
+      const band = getMasteryBand(acc);
+      return band === "medium";
+    });
+
+  if (yellowUnits.length) {
+    const u = yellowUnits[0];
+    const acc = Math.round((u.correct / Math.max(1, u.answered)) * 100);
+    suggestions.push({
+      label: `📚 Reinforce Unit ${u.unit} (you’re at ~${acc}% over ${u.answered} questions).`,
+      action: "unit",
+      unit: u.unit,
+    });
+  }
+
+  // Global mistakes suggestion
+  const totalWrong = answered - correct;
+  if (totalWrong >= 10) {
+    suggestions.push({
+      label: `🧩 Do a Mistakes-only session (you’ve missed ${totalWrong} questions).`,
+      action: "mistakes",
+    });
+  }
+
+  if (!suggestions.length) {
+    suggestions.push({
+      label: "✅ Keep going with mixed practice and spaced repetition.",
+      action: null,
+    });
+  }
+
+  suggestions.forEach((sugg) => {
+    const li = createEl("li", "", []);
+    const btn = createEl(
+      "button",
+      "w-full text-left text-xs px-2 py-1.5 rounded-md hover:bg-blue-100 flex justify-between items-center",
+      [createEl("span", "", [sugg.label])]
+    );
+    btn.type = "button";
+
+    btn.addEventListener("click", () => {
+      if (sugg.action === "unit" && sugg.unit != null) {
+        launchUnitPracticeFromAnalytics(sugg.unit);
+      } else if (sugg.action === "mistakes") {
+        launchMistakesSessionFromAnalytics();
+      } else if (sugg.action === "sr") {
+        launchSRFromAnalytics();
       }
+    });
 
+    li.appendChild(btn);
+    suggestionsList.appendChild(li);
+  });
+
+  nextStepsCard.appendChild(suggestionsList);
+  wrapper.appendChild(nextStepsCard);
+
+  // ---------- Existing by-unit accuracy ----------
+  const byUnitCard = createEl(
+    "div",
+    "rounded-xl border border-gray-200 bg-white p-3 space-y-2",
+    []
+  );
+  byUnitCard.appendChild(
+    createEl("div", "flex justify-between items-center", [
+      createEl("h2", "text-xs font-semibold text-gray-900", [
+        "By-unit accuracy",
+      ]),
+      createEl("span", "text-[11px] text-gray-500", [
+        "Hover heatmap above or review here.",
+      ]),
+    ])
+  );
+
+  if (!unitSummary.length) {
+  byUnitCard.appendChild(
+    createEl("p", "text-xs text-gray-500", [
+      "Once you’ve done some questions, you’ll see unit stats here.",
+    ])
+  );
+} else {
+  unitSummary.forEach((u) => {
+    const acc =
+      u.answered > 0
+        ? Math.round((u.correct / u.answered) * 100)
+        : null;
+    const band = acc == null ? "none" : getMasteryBand(acc);
+
+    const row = createEl(
+      "div",
+      "flex items-center justify-between text-xs py-1",
+      []
+    );
+    row.appendChild(
+      createEl("span", "w-16 text-gray-700", [`Unit ${u.unit}`])
+    );
+
+    const barWrapper = createEl(
+      "div",
+      "flex-1 mx-2 h-1.5 bg-gray-200 rounded-full overflow-hidden",
+      []
+    );
+    const fill = createEl("div", "h-1.5 rounded-full", []);
+    fill.className +=
+      " " +
+      (band === "high"
+        ? "bg-emerald-500"
+        : band === "medium"
+        ? "bg-amber-500"
+        : band === "low"
+        ? "bg-rose-500"
+        : "bg-gray-300");
+    fill.style.width = acc == null ? "0%" : acc + "%";
+    barWrapper.appendChild(fill);
+    row.appendChild(barWrapper);
+
+    row.appendChild(
+      createEl("span", "w-10 text-right text-gray-600", [
+        acc == null ? "—" : acc + "%",
+      ])
+    );
+
+    byUnitCard.appendChild(row);
+  });
+}
+  wrapper.appendChild(byUnitCard);
+  // ---------- By-skill summary ----------
+  const skills = Object.entries(skillStats || {});
+  const skillCard = createEl(
+    "div",
+    "rounded-xl border border-gray-200 bg-white p-3 space-y-2",
+    []
+  );
+  skillCard.appendChild(
+    createEl("div", "flex justify-between items-center", [
+      createEl("h2", "text-xs font-semibold text-gray-900", [
+        "Skill breakdown",
+      ]),
+    ])
+  );
+
+  if (!skills.length) {
+    skillCard.appendChild(
+      createEl("p", "text-xs text-gray-500", [
+        "Answer some questions to unlock skill analytics.",
+      ])
+    );
+  } else {
+    skills
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([skill, s]) => {
+        const acc =
+          s.answered > 0
+            ? Math.round((s.correct / s.answered) * 100)
+            : null;
+        const row = createEl(
+          "div",
+          "flex items-center justify-between text-xs py-1",
+          []
+        );
+        row.appendChild(
+          createEl("span", "flex-1 text-gray-700 truncate", [skill])
+        );
+        row.appendChild(
+          createEl("span", "w-16 text-right text-gray-600", [
+            acc == null ? "—" : acc + "%",
+          ])
+        );
+        row.appendChild(
+          createEl("span", "w-16 text-right text-gray-400", [
+            `${s.answered || 0} q`,
+          ])
+        );
+        skillCard.appendChild(row);
+      });
+  }
+
+  wrapper.appendChild(skillCard);
+
+  content.innerHTML = "";
+  content.appendChild(wrapper);
+}
+      
       // ---------------- Practice Panel ----------------
       function renderPracticePanel() {
         const wrapper = createEl("div", "space-y-4", []);
@@ -2966,27 +3649,27 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             ])
           );
 
-          const row1 = createEl(
-            "div",
-            "flex items-center gap-2 text-sm",
-            []
-          );
-          const unitSelect = createEl(
-            "select",
-            "flex-1 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
-            []
-          );
-          AP_UNITS.forEach((label, idx) => {
-            const opt = document.createElement("option");
-            opt.value = String(idx + 1);
-            opt.textContent = `Unit ${idx + 1}`;
-            unitSelect.appendChild(opt);
-          });
-          const countInput = createEl(
-            "input",
-            "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
-            []
-          );
+const row1 = createEl(
+  "div",
+  "flex items-center gap-2 text-xs",
+  []
+);
+const unitSelect = createEl(
+  "select",
+  "flex-1 max-w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs truncate focus:outline-none focus:ring-1 focus:ring-blue-500",
+  []
+);
+   AP_UNITS.forEach((label, idx) => {
+  const opt = document.createElement("option");
+  opt.value = String(idx + 1);
+  opt.textContent = `Unit ${idx + 1}: ${label}`;
+  unitSelect.appendChild(opt);
+});
+const countInput = createEl(
+  "input",
+  "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
+  []
+);          
           countInput.type = "number";
           countInput.min = "5";
           countInput.max = "50";
@@ -3056,6 +3739,36 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
           btn.addEventListener("click", () => {
             const limit = Number(countInput.value || 10);
             startPractice({ mode: "smart", limit });
+          });
+          card.appendChild(btn);
+
+          grid.appendChild(card);
+        })();
+        // Full MC exam simulation
+        (function () {
+          const card = createEl(
+            "div",
+            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+            []
+          );
+          card.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", [
+              "Full MC exam",
+            ])
+          );
+          card.appendChild(
+            createEl("p", "text-sm text-gray-600", [
+              "Simulate the full AP Psychology MC section (60 questions, 70 minutes, one pass).",
+            ])
+          );
+
+          const btn = createEl(
+            "button",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Start full exam"]
+          );
+          btn.addEventListener("click", () => {
+            startFullExam();
           });
           card.appendChild(btn);
 
@@ -3234,10 +3947,10 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             []
           );
           const unitSelect = createEl(
-            "select",
-            "flex-1 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
-            []
-          );
+  "select",
+  "flex-1 max-w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs truncate focus:outline-none focus:ring-1 focus:ring-blue-500",
+  []
+);
           [
             { value: "all", label: "All units" },
             { value: "weak", label: "Weakest units" },
@@ -3248,11 +3961,12 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
             unitSelect.appendChild(opt);
           });
           AP_UNITS.forEach((label, idx) => {
-            const opt = document.createElement("option");
-            opt.value = String(idx + 1);
-            opt.textContent = `Unit ${idx + 1}`;
-            unitSelect.appendChild(opt);
-          });
+  const opt = document.createElement("option");
+  opt.value = String(idx + 1);
+  opt.textContent = `Unit ${idx + 1}: ${label}`;
+  unitSelect.appendChild(opt);
+});
+
           unitRow.appendChild(
             createEl("span", "text-sm text-gray-600", ["Mode:"])
           );
@@ -3470,7 +4184,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         content.appendChild(wrapper);
       }
 
-    async function renderTeacherClasses() {
+   async function renderTeacherClasses() {
   const content = $("tab-content");
   content.innerHTML =
     "<p class='text-sm text-gray-500'>Loading classes…</p>";
@@ -3555,19 +4269,45 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
     ])
   );
 
+  let rosterCard = null;
+
   if (!classes.length) {
     listCard.appendChild(
       createEl("p", "text-sm text-gray-500", [
         "You haven’t created any classes yet. Use the form above to get started.",
       ])
     );
+
+    // no roster card if there are no classes
+    wrapper.appendChild(listCard);
+    content.innerHTML = "";
+    content.appendChild(wrapper);
+    return;
   } else {
+    // create an empty roster card that we'll fill when a class is selected
+    rosterCard = createEl(
+      "div",
+      "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+      []
+    );
+    rosterCard.appendChild(
+      createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
+        "Class roster",
+      ])
+    );
+    rosterCard.appendChild(
+      createEl("p", "text-sm text-gray-500", [
+        "Select a class above to see enrolled students.",
+      ])
+    );
+
     classes.forEach((c) => {
       const row = createEl(
         "div",
         "flex items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-sm",
         []
       );
+
       const left = createEl("div", "", [
         createEl("p", "text-xs font-semibold text-gray-900", [
           c.name || "Class",
@@ -3581,11 +4321,23 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
 
       const right = createEl("div", "flex items-center gap-1", []);
 
+      // NEW: View roster button
+      const rosterBtn = createEl(
+        "button",
+        "px-2 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+        ["View roster"]
+      );
+      rosterBtn.type = "button";
+      rosterBtn.addEventListener("click", () => {
+        renderClassRoster(rosterCard, c);
+      });
+
       const copyBtn = createEl(
         "button",
         "px-2 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
         ["Copy code"]
       );
+      copyBtn.type = "button";
       copyBtn.addEventListener("click", () => {
         if (c.code && navigator.clipboard) {
           navigator.clipboard.writeText(c.code);
@@ -3598,6 +4350,7 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         "px-2 py-1 rounded-lg border border-red-300 text-xs text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-500",
         ["Delete"]
       );
+      deleteBtn.type = "button";
       deleteBtn.addEventListener("click", async () => {
         const ok = window.confirm(
           "Delete this class? This will remove it for all students."
@@ -3613,20 +4366,75 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         }
       });
 
+      right.appendChild(rosterBtn);
       right.appendChild(copyBtn);
       right.appendChild(deleteBtn);
+
       row.appendChild(left);
       row.appendChild(right);
       listCard.appendChild(row);
     });
+
+    // attach both the class list and the roster card
+    wrapper.appendChild(listCard);
+    wrapper.appendChild(rosterCard);
+    content.innerHTML = "";
+    content.appendChild(wrapper);
+    return;
+  }
+}  
+  function renderClassRoster(cardEl, classObj) {
+  cardEl.innerHTML = "";
+
+  cardEl.appendChild(
+    createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
+      `Class roster · ${classObj.name || "Class"}`,
+    ])
+  );
+
+  const students = Array.isArray(classObj.students)
+    ? classObj.students
+    : [];
+
+  if (!students.length) {
+    cardEl.appendChild(
+      createEl("p", "text-sm text-gray-500", [
+        "No students have joined this class yet. Share the class code so students can enroll.",
+      ])
+    );
+    return;
   }
 
-  wrapper.appendChild(listCard);
-  content.innerHTML = "";
-  content.appendChild(wrapper);
+  const list = createEl("ul", "divide-y divide-gray-100", []);
+
+  students.forEach((s) => {
+    if (!s || !s.id) return;
+
+    const li = createEl(
+      "li",
+      "py-1 flex items-center justify-between text-sm",
+      []
+    );
+
+    const name =
+      s.name || s.displayName || s.email || s.id.slice(0, 6);
+
+    li.appendChild(
+      createEl("span", "text-gray-900", [name])
+    );
+
+    if (s.email) {
+      li.appendChild(
+        createEl("span", "text-xs text-gray-500", [s.email])
+      );
+    }
+
+    list.appendChild(li);
+  });
+
+  cardEl.appendChild(list);
 }
-
-
+     
       function parseBatchQuestions(raw, teacherId) {
   const lines = (raw || "")
     .split(/\r?\n/)
@@ -4716,245 +5524,736 @@ recentCard.appendChild(card);
         content.innerHTML = "";
         content.appendChild(wrapper);
       }
+async function renderTeacherGrades() {
+  const content = $("tab-content");
+  content.innerHTML =
+    "<p class='text-sm text-gray-500'>Loading gradebook…</p>";
 
-      async function renderTeacherResults() {
-        const content = $("tab-content");
-        content.innerHTML =
-          "<p class='text-sm text-gray-500'>Loading class analytics…</p>";
-        const teacherId = AppState.user.uid;
+  const teacherId = AppState.user.uid;
+  let classes = [];
+  let assignments = [];
+  let submissions = [];
 
-        let classes = [];
-        let assignments = [];
-        let submissions = [];
-        try {
-          const [cls, asg] = await Promise.all([
-            DataManager.listClassesForTeacher(teacherId),
-            DataManager.listAssignmentsForTeacher(teacherId),
-          ]);
-          classes = cls || [];
-          assignments = asg || [];
-          const arrays = [];
-          for (const a of assignments) {
-            try {
-              const subs = await DataManager.listSubmissionsForAssignment(
-                a.id
-              );
-              arrays.push(subs);
-            } catch (e) {
-              console.error("Result submissions load error", e);
-            }
-          }
-          submissions = arrays.flat();
-        } catch (e) {
-          console.error("Teacher results error", e);
-          Toast.show(
-            "Analytics could not fully load (check Firestore rules).",
-            "error"
-          );
-        }
-TeacherResultsState.classes = classes || [];
-TeacherResultsState.assignments = assignments || [];
-TeacherResultsState.submissions = submissions || [];
-        const wrapper = createEl("div", "space-y-4", []);
-        wrapper.appendChild(
-          createEl("div", "flex items-center justify-between", [
-            createEl("div", "", [
-              createEl("h1", "text-sm font-semibold text-gray-900", [
-                "Class analytics",
-              ]),
-              createEl("p", "text-sm text-gray-600", [
-                "Class-wide summaries, unit difficulty, and question-level insights.",
-              ]),
-            ]),
-          ])
-        );
+  try {
+    const [cls, asg] = await Promise.all([
+      DataManager.listClassesForTeacher(teacherId),
+      DataManager.listAssignmentsForTeacher(teacherId),
+    ]);
 
-        if (!assignments.length || !submissions.length) {
-          wrapper.appendChild(
-            createEl("p", "text-sm text-gray-500", [
-              "Once students complete assignments, you’ll see analytics here.",
-            ])
-          );
-          content.innerHTML = "";
-          content.appendChild(wrapper);
-          return;
-        }
+    classes = cls || [];
+    assignments = asg || [];
 
-        const studentSet = new Set();
-const studentInfoMap = {};
-classes.forEach((c) => {
-  (c.studentIds || []).forEach((id) => studentSet.add(id));
-  (c.students || []).forEach((s) => {
+    const arrays = [];
+    for (const a of assignments) {
+      try {
+        const subs = await DataManager.listSubmissionsForAssignment(a.id);
+        arrays.push(subs);
+      } catch (e) {
+        console.error("Gradebook submissions load error", e);
+      }
+    }
+    submissions = arrays.flat();
+  } catch (e) {
+    console.error("renderTeacherGrades error", e);
+    Toast.show(
+      "Could not load gradebook (check Firestore rules).",
+      "error"
+    );
+  }
+
+  // 🔸 keep this ONCE
+  if (!classes.length || !assignments.length) {
+    const wrapper = createEl("div", "space-y-4", []);
+    wrapper.appendChild(
+      createEl("h1", "text-sm font-semibold text-gray-900", [
+        "Grades",
+      ])
+    );
+    wrapper.appendChild(
+      createEl("p", "text-sm text-gray-500", [
+        "Once you’ve created assignments and have a roster, you’ll see grades here.",
+      ])
+    );
+    content.innerHTML = "";
+    content.appendChild(wrapper);
+    return;
+  }
+
+  // 🔹 NEW: pick and filter to a single class
+  if (!TeacherGradesState.selectedClassId && classes.length) {
+    TeacherGradesState.selectedClassId = classes[0].id;
+  }
+  const selectedClassId = TeacherGradesState.selectedClassId;
+
+  const selectedClass =
+    classes.find((c) => c.id === selectedClassId) || classes[0];
+
+  const classAssignments = assignments.filter(
+    (a) => a.classId === selectedClass.id
+  );
+
+  if (!classAssignments.length) {
+    const wrapper = createEl("div", "space-y-4", []);
+    wrapper.appendChild(
+      createEl("h1", "text-sm font-semibold text-gray-900", ["Grades"])
+    );
+    wrapper.appendChild(
+      createEl("p", "text-sm text-gray-500", [
+        "This class has no assignments yet.",
+      ])
+    );
+    content.innerHTML = "";
+    content.appendChild(wrapper);
+    return;
+  }
+
+  // ✅ Build student list (for *this* class only)
+  const studentMap = {};
+  (selectedClass.students || []).forEach((s) => {
     if (!s || !s.id) return;
-    const key = s.id;
-    if (!studentInfoMap[key]) {
-      studentInfoMap[key] = {
+    if (!studentMap[s.id]) {
+      studentMap[s.id] = {
+        id: s.id,
         email: s.email || "",
+        name: s.name || s.email || s.id.slice(0, 6),
       };
     }
   });
-});
+  const students = Object.values(studentMap);
 
-const now = Date.now();
-
-        const activeAssignments = assignments.filter((a) => {
-          if (!a.dueAt) return true;
-          const ts = new Date(a.dueAt).getTime();
-          return isNaN(ts) ? true : ts >= now;
-        }).length;
-
-        const scores = submissions
-          .map((s) =>
-            typeof s.scorePercent === "number" ? s.scorePercent : null
-          )
-          .filter((s) => s != null && !isNaN(s));
-        const avgScore =
-          scores.length > 0
-            ? Math.round(
-                scores.reduce((acc, v) => acc + v, 0) / scores.length
-              )
-            : null;
-
-        const topRow = createEl(
-          "div",
-          "grid grid-cols-1 md:grid-cols-4 gap-3",
-          [
-            statCard("Classes", classes.length),
-            statCard("Students", studentSet.size || 0),
-            statCard("Active assignments", activeAssignments),
-            statCard(
-              "Average score",
-              avgScore == null ? "—" : avgScore + "%"
-            ),
-          ]
-        );
-        wrapper.appendChild(topRow);const questionLibCard = createEl(
-  "div",
-  "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
-  []
-);
-const headerRow = createEl(
-  "div",
-  "flex items-center justify-between",
-  []
-);
-headerRow.appendChild(
-  createEl("h3", "text-xs font-semibold text-gray-800", [
-    "Question library",
-  ])
-);
-const openLibBtn = createEl(
-  "button",
-  "px-2 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50",
-  ["Open"]
-);
-headerRow.appendChild(openLibBtn);
-questionLibCard.appendChild(headerRow);
-questionLibCard.appendChild(
-  createEl("p", "text-sm text-gray-600", [
-    "Browse, edit, or delete questions in your bank.",
-  ])
-);
-openLibBtn.addEventListener("click", () => openQuestionLibrary());
-wrapper.appendChild(questionLibCard);
-const studentCard = createEl(
-  "div",
-  "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
-  []
-);
-studentCard.appendChild(
-  createEl("div", "flex items-center justify-between", [
-    createEl("h3", "text-xs font-semibold text-gray-800", [
-      "Students",
-    ]),
-    createEl("p", "text-sm text-gray-500", [
-      "Click a student to see their progress.",
-    ]),
-  ])
-);
-
-if (!studentSet.size) {
-  studentCard.appendChild(
-    createEl("p", "text-sm text-gray-500", [
-      "Once students join your classes and complete assignments, they’ll appear here.",
-    ])
-  );
-} else {
-  const subsByStudent = {};
-  submissions.forEach((s) => {
-    const uid = s.userId;
-    if (!uid) return;
-    if (!subsByStudent[uid]) subsByStudent[uid] = [];
-    subsByStudent[uid].push(s);
+  // Latest submission per (student, assignment)
+  const latest = {};
+  (submissions || []).forEach((s) => {
+    const aId = s.assignmentId;
+    const uId = s.userId || s.studentId;
+    if (!aId || !uId) return;
+    const key = `${uId}__${aId}`;
+    const ts =
+      s.completedAt?.toMillis?.() ??
+      (s.completedAt ? new Date(s.completedAt).getTime() : 0);
+    const prev = latest[key];
+    if (!prev || ts > prev._ts) {
+      latest[key] = Object.assign({ _ts: ts }, s);
+    }
   });
 
-  const list = createEl(
-    "div",
-    "divide-y divide-gray-100 border border-gray-100 rounded-lg mt-1",
-    []
+// UI
+const wrapper = createEl("div", "space-y-3", []);
+
+// Header row with title, class dropdown, and CSV button
+const headerRow = createEl(
+  "div",
+  "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between",
+  []
+);
+
+// Left side: title + description + class dropdown
+const left = createEl(
+  "div",
+  "flex flex-col sm:flex-row sm:items-center gap-2",
+  []
+);
+
+const titleBlock = createEl("div", "", [
+  createEl("h1", "text-sm font-semibold text-gray-900", ["Gradebook"]),
+  createEl("p", "text-xs text-gray-600", [
+    "Quick grid of latest scores by assignment. Export to CSV for your SIS.",
+  ]),
+]);
+left.appendChild(titleBlock);
+
+// Class dropdown
+const classSelect = createEl(
+  "select",
+  "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
+  []
+);
+
+classes.forEach((c) => {
+  if (!c || !c.id) return;
+  const opt = document.createElement("option");
+  opt.value = c.id;
+  opt.textContent = c.name || "Untitled class";
+  if (c.id === selectedClass.id) {
+    opt.selected = true;
+  }
+  classSelect.appendChild(opt);
+});
+
+classSelect.addEventListener("change", (e) => {
+  TeacherGradesState.selectedClassId = e.target.value || null;
+  renderTeacherGrades();
+});
+
+left.appendChild(classSelect);
+
+// Right side: CSV button
+const right = createEl("div", "", [
+  createEl(
+    "button",
+    "px-3 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
+    ["Download CSV"]
+  ),
+]);
+
+headerRow.appendChild(left);
+headerRow.appendChild(right);
+wrapper.appendChild(headerRow);
+
+const exportBtn = right.querySelector("button");
+exportBtn.addEventListener("click", () => {
+  // if you updated exportGradebookCSV to accept className:
+  exportGradebookCSV(
+    students,
+    classAssignments,
+    latest,
+    selectedClass.name || selectedClass.id || ""
   );
 
-  Array.from(studentSet).forEach((id) => {
-    const subs = subsByStudent[id] || [];
-    const overview = AnalyticsService.computeStudentOverview(subs);
-    const label =
-      (studentInfoMap[id] && studentInfoMap[id].email) || id;
+  // if not yet, you can temporarily use:
+  // exportGradebookCSV(students, classAssignments, latest);
+});
+ 
 
-    const assignmentsCount = subs.length;
-    const pct =
-      overview && typeof overview.avgScore === "number"
-        ? Math.round(overview.avgScore)
-        : null;
-    const ap =
-      overview && typeof overview.apPrediction === "number"
-        ? overview.apPrediction.toFixed(1)
-        : null;
+  const table = createEl(
+    "div",
+    "mt-1 border border-gray-200 rounded-lg overflow-auto",
+    []
+  );
+  // Header row
+  const header = createEl(
+    "div",
+    "min-w-max grid gap-1 px-2 py-1.5 text-[11px] font-medium bg-gray-50 text-gray-600",
+    []
+  );
+  header.style.gridTemplateColumns =
+  "minmax(180px, 2fr) repeat(" +
+  classAssignments.length +
+  ", minmax(80px, 1fr))";
+
+header.appendChild(createEl("div", "", ["Student"]));
+classAssignments.forEach((a) => {
+  const label = a.title || "Untitled";
+  const cell = createEl(
+    "button",
+    "text-left hover:underline",
+    [label]
+  );
+  cell.type = "button";
+  cell.addEventListener("click", () => {
+  TeacherResultsState.focusAssignmentId = a.id;
+  AppState.currentTab = "results";
+  renderTabs();
+  renderTeacherResults();
+});
+  header.appendChild(cell);
+});
+  
+  table.appendChild(header);
+
+  const body = createEl("div", "min-w-max", []);
+  students.forEach((s) => {
+    const row = createEl(
+      "div",
+      "grid gap-1 px-2 py-1.5 text-[11px] items-center border-t border-gray-50 hover:bg-gray-50",
+      []
+    );
+    row.style.gridTemplateColumns =
+      "minmax(180px, 2fr) repeat(" +
+      classAssignments.length +
+      ", minmax(80px, 1fr))";
+
+    const nameBtn = createEl(
+      "button",
+      "text-left text-gray-900 hover:underline",
+      [s.name]
+    );
+    nameBtn.type = "button";
+    nameBtn.addEventListener("click", () => {
+      openStudentProgressModal(
+        s.id,
+        s.name || s.email || ""
+      );
+    });
+
+    row.appendChild(nameBtn);
+
+    classAssignments.forEach((a) => {
+      const key = `${s.id}__${a.id}`;
+      const sub = latest[key];
+      let percent = "";
+      if (sub && typeof sub.scorePercent === "number") {
+        percent = Math.round(sub.scorePercent) + "%";
+      }
+
+      const cell = createEl(
+        "div",
+        "text-center text-gray-700",
+        [percent || "—"]
+      );
+      row.appendChild(cell);
+    });
+
+    body.appendChild(row);
+  });
+
+  table.appendChild(body);
+  wrapper.appendChild(table);
+
+  content.innerHTML = "";
+  content.appendChild(wrapper);
+} // <-- end of renderTeacherGrades
+
+
+// CSV helper is a separate top-level function
+function exportGradebookCSV(students, assignments, latestMap, className) {
+  const header = ["Student Name", "Student Email"].concat(
+    assignments.map((a) => a.title || "Untitled")
+  );
+
+  const rows = [header];
+
+  students.forEach((s) => {
+    const row = [s.name || "", s.email || ""];
+    assignments.forEach((a) => {
+      const key = `${s.id}__${a.id}`;
+      const sub = latestMap[key];
+      let val = "";
+      if (sub && typeof sub.scorePercent === "number") {
+        val = Math.round(sub.scorePercent) + "%";
+      }
+      row.push(val);
+    });
+    rows.push(row);
+  });
+
+  const csv = rows
+    .map((r) =>
+      r
+        .map((cell) => {
+          if (cell == null) return "";
+          const s = String(cell);
+          if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+            return `"${s.replace(/"/g, '""')}"`;
+          }
+          return s;
+        })
+        .join(",")
+    )
+    .join("\n");
+
+  const blob = new Blob([csv], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  // Build a safe class-based filename
+  const safeName = (className || "class")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "class";
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `grades_${safeName}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function renderTeacherResults() {
+  const content = $("tab-content");
+  content.innerHTML =
+    "<p class='text-sm text-gray-500'>Loading class analytics…</p>";
+  const teacherId = AppState.user.uid;
+
+  let classes = [];
+  let assignments = [];
+  let submissions = [];
+
+  try {
+    const [cls, asg] = await Promise.all([
+      DataManager.listClassesForTeacher(teacherId),
+      DataManager.listAssignmentsForTeacher(teacherId),
+    ]);
+    classes = cls || [];
+    assignments = asg || [];
+
+    const arrays = [];
+    for (const a of assignments) {
+      try {
+        const subs = await DataManager.listSubmissionsForAssignment(a.id);
+        arrays.push(subs);
+      } catch (e) {
+        console.error("Result submissions load error", e);
+      }
+    }
+    submissions = arrays.flat();
+  } catch (e) {
+    console.error("Teacher results error", e);
+    Toast.show(
+      "Analytics could not fully load (check Firestore rules).",
+      "error"
+    );
+  }
+
+  TeacherResultsState.classes = classes || [];
+  TeacherResultsState.assignments = assignments || [];
+  TeacherResultsState.submissions = submissions || [];
+
+  const wrapper = createEl("div", "space-y-4", []);
+
+  wrapper.appendChild(
+    createEl("div", "flex items-center justify-between", [
+      createEl("div", "", [
+        createEl("h1", "text-sm font-semibold text-gray-900", [
+          "Class analytics",
+        ]),
+        createEl("p", "text-sm text-gray-600", [
+          "Class-wide summaries, unit difficulty, question-level insights, and assignment completion.",
+        ]),
+      ]),
+    ])
+  );
+
+  if (!assignments.length || !submissions.length) {
+    wrapper.appendChild(
+      createEl("p", "text-sm text-gray-500", [
+        "Once students complete assignments, you’ll see analytics here.",
+      ])
+    );
+    content.innerHTML = "";
+    content.appendChild(wrapper);
+    return;
+  }
+
+  const studentSet = new Set();
+  const studentInfoMap = {};
+  classes.forEach((c) => {
+    (c.studentIds || []).forEach((id) => studentSet.add(id));
+    (c.students || []).forEach((s) => {
+      if (!s || !s.id) return;
+      const key = s.id;
+      if (!studentInfoMap[key]) {
+        studentInfoMap[key] = {
+          email: s.email || "",
+        };
+      }
+    });
+  });
+
+  const now = Date.now();
+
+  const activeAssignments = assignments.filter((a) => {
+    if (!a.dueAt) return true;
+    const ts = new Date(a.dueAt).getTime();
+    return isNaN(ts) ? true : ts >= now;
+  }).length;
+
+  const scores = submissions
+    .map((s) =>
+      typeof s.scorePercent === "number" ? s.scorePercent : null
+    )
+    .filter((s) => s != null && !isNaN(s));
+  const avgScore =
+    scores.length > 0
+      ? Math.round(
+          scores.reduce((acc, v) => acc + v, 0) / scores.length
+        )
+      : null;
+
+  const topRow = createEl(
+    "div",
+    "grid grid-cols-1 md:grid-cols-4 gap-3",
+    [
+      statCard("Classes", classes.length),
+      statCard("Students", studentSet.size || 0),
+      statCard("Active assignments", activeAssignments),
+      statCard(
+        "Average score",
+        avgScore == null ? "—" : avgScore + "%"
+      ),
+    ]
+  );
+  wrapper.appendChild(topRow);
+
+  // ---------- NEW: assignment status overview ----------
+  const statusMap = buildAssignmentStatusMap(
+  classes,
+  assignments,
+  submissions
+);
+
+const assignmentsCard = createEl(
+  "div",
+  "rounded-xl border border-gray-200 bg-white p-3 space-y-2",
+  []
+);
+
+assignmentsCard.appendChild(
+  createEl("div", "flex items-center justify-between", [
+    createEl("div", "", [
+      createEl("h2", "text-xs font-semibold text-gray-900", [
+        "Assignments & completion",
+      ]),
+      createEl("p", "text-xs text-gray-500", [
+        "Click an assignment to see student-level status.",
+      ]),
+    ]),
+  ])
+);
+
+const assignmentList = createEl("div", "space-y-1", []);
+
+assignments
+  .slice()
+  .sort((a, b) => {
+    const ta = a.dueAt ? new Date(a.dueAt).getTime() : 0;
+    const tb = b.dueAt ? new Date(b.dueAt).getTime() : 0;
+    return ta - tb;
+  })
+  .forEach((a) => {
+    const s = statusMap[a.id] || {
+      counts: {
+        notStarted: 0,
+        completedOnTime: 0,
+        completedLate: 0,
+        missing: 0,
+      },
+    };
+    const counts = s.counts || {};
+    const total =
+      counts.notStarted +
+      counts.completedOnTime +
+      counts.completedLate +
+      counts.missing;
 
     const row = createEl(
       "button",
-      "w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 focus:outline-none rounded-lg",
+      "w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-gray-50 text-left text-xs",
+      []
+    );
+    row.type = "button";
+
+    const left = createEl("div", "flex flex-col", [
+      createEl("span", "font-medium text-gray-900", [
+        a.title || "Untitled assignment",
+      ]),
+      createEl("span", "text-[11px] text-gray-500", [
+        a.dueAt
+          ? `Due ${formatShortDateTime(a.dueAt)}`
+          : "No due date",
+      ]),
+    ]);
+
+    const completed =
+      (counts.completedOnTime || 0) + (counts.completedLate || 0);
+
+    const chipRow = createEl(
+      "div",
+      "flex items-center gap-1 text-[11px]",
+      []
+    );
+    chipRow.appendChild(
+      createEl(
+        "span",
+        "inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border-emerald-200",
+        [`${completed}/${total || "-"} completed`]
+      )
+    );
+    if (counts.missing > 0) {
+      chipRow.appendChild(
+        createEl(
+          "span",
+          "inline-flex items-center px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border-rose-200",
+          [`${counts.missing} missing`]
+        )
+      );
+    }
+    if (counts.notStarted > 0) {
+      chipRow.appendChild(
+        createEl(
+          "span",
+          "inline-flex items-center px-2 py-0.5 rounded-full bg-gray-50 text-gray-600 border-gray-200",
+          [`${counts.notStarted} not started`]
+        )
+      );
+    }
+
+    row.appendChild(left);
+    row.appendChild(chipRow);
+
+    row.addEventListener("click", () => {
+      renderAssignmentStatusDetail(
+        a,
+        s,
+        studentInfoMap,
+        assignmentsCard
+      );
+    });
+
+    assignmentList.appendChild(row);
+  });
+
+// 🔹 NEW: auto-open focused assignment if coming from Gradebook
+const focusId = TeacherResultsState.focusAssignmentId;
+if (focusId) {
+  const focusedAssignment = assignments.find((as) => as.id === focusId);
+  const statusEntry = focusedAssignment ? statusMap[focusId] : null;
+  if (focusedAssignment && statusEntry) {
+    renderAssignmentStatusDetail(
+      focusedAssignment,
+      statusEntry,
+      studentInfoMap,
+      assignmentsCard
+    );
+  }
+  // Clear so it doesn't re-focus next time
+  TeacherResultsState.focusAssignmentId = null;
+}
+
+assignmentsCard.appendChild(assignmentList);
+assignmentsCard.appendChild(
+  createEl(
+    "div",
+    "mt-2 text-[11px] text-gray-400 italic",
+    ["Tip: Use the Grades tab for a full grid view and CSV export."]
+  )
+);
+
+  wrapper.appendChild(assignmentsCard);
+
+  // ---------- EXISTING: Question library card ----------
+  const questionLibCard = createEl(
+    "div",
+    "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+    []
+  );
+  const headerRow = createEl(
+    "div",
+    "flex items-center justify-between",
+    []
+  );
+  headerRow.appendChild(
+    createEl("h3", "text-xs font-semibold text-gray-800", [
+      "Question library",
+    ])
+  );
+  const openLibBtn = createEl(
+    "button",
+    "px-2 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50",
+    ["Open"]
+  );
+  headerRow.appendChild(openLibBtn);
+  questionLibCard.appendChild(headerRow);
+  questionLibCard.appendChild(
+    createEl("p", "text-sm text-gray-600", [
+      "Browse, edit, or delete questions in your bank.",
+    ])
+  );
+  openLibBtn.addEventListener("click", () => openQuestionLibrary());
+  wrapper.appendChild(questionLibCard);
+
+  // ---------- EXISTING: Students card ----------
+  const studentCard = createEl(
+    "div",
+    "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+    []
+  );
+  studentCard.appendChild(
+    createEl("div", "flex items-center justify-between", [
+      createEl("h3", "text-xs font-semibold text-gray-800", [
+        "Students",
+      ]),
+      createEl("p", "text-sm text-gray-500", [
+        "Click a student to see their progress.",
+      ]),
+    ])
+  );
+
+  if (!studentSet.size) {
+    studentCard.appendChild(
+      createEl("p", "text-sm text-gray-500", [
+        "Once students join your classes and complete assignments, they’ll appear here.",
+      ])
+    );
+  } else {
+    const subsByStudent = {};
+    submissions.forEach((s) => {
+      const uid = s.userId;
+      if (!uid) return;
+      if (!subsByStudent[uid]) subsByStudent[uid] = [];
+      subsByStudent[uid].push(s);
+    });
+
+    const list = createEl(
+      "div",
+      "divide-y divide-gray-100 border border-gray-100 rounded-lg mt-1",
       []
     );
 
-    const left = createEl("div", "flex flex-col", [
-      createEl("span", "text-sm font-medium text-gray-900", [
-        label,
-      ]),
-      createEl("span", "text-sm text-gray-500", [
-        assignmentsCount
-          ? `${assignmentsCount} submission${
-              assignmentsCount === 1 ? "" : "s"
-            }`
-          : "No submissions yet",
-      ]),
-    ]);
+    Array.from(studentSet).forEach((id) => {
+      const subs = subsByStudent[id] || [];
+      const overview = AnalyticsService.computeStudentOverview(subs);
+      const label =
+        (studentInfoMap[id] && studentInfoMap[id].email) || id;
 
-    const right = createEl("div", "flex flex-col items-end", [
-      createEl(
-        "span",
-        "text-sm font-semibold text-gray-900",
-        [pct == null ? "—" : pct + "%"]
-      ),
-      createEl("span", "text-sm text-gray-500", [
-        ap ? `AP ≈ ${ap}` : "",
-      ]),
-    ]);
+      const assignmentsCount = subs.length;
+      const pct =
+        overview && typeof overview.avgScore === "number"
+          ? Math.round(overview.avgScore)
+          : null;
+      const ap =
+        overview && typeof overview.apPrediction === "number"
+          ? overview.apPrediction.toFixed(1)
+          : null;
 
-    row.appendChild(left);
-    row.appendChild(right);
+      const row = createEl(
+        "button",
+        "w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 focus:outline-none rounded-lg",
+        []
+      );
 
-    row.addEventListener("click", () =>
-      openStudentProgressModal(id, label)
-    );
+      const left = createEl("div", "flex flex-col", [
+        createEl("span", "text-sm font-medium text-gray-900", [
+          label,
+        ]),
+        createEl("span", "text-sm text-gray-500", [
+          assignmentsCount
+            ? `${assignmentsCount} submission${
+                assignmentsCount === 1 ? "" : "s"
+              }`
+            : "No submissions yet",
+        ]),
+      ]);
 
-    list.appendChild(row);
-  });
+      const right = createEl("div", "flex flex-col items-end", [
+        createEl(
+          "span",
+          "text-sm font-semibold text-gray-900",
+          [pct == null ? "—" : pct + "%"]
+        ),
+        createEl("span", "text-sm text-gray-500", [
+          ap ? `AP ≈ ${ap}` : "",
+        ]),
+      ]);
 
-  studentCard.appendChild(list);
-}
+      row.appendChild(left);
+      row.appendChild(right);
 
-wrapper.appendChild(studentCard);
-        // Unit difficulty map
+      row.addEventListener("click", () =>
+        openStudentProgressModal(id, label)
+      );
+
+      list.appendChild(row);
+    });
+
+    studentCard.appendChild(list);
+  }
+
+  wrapper.appendChild(studentCard);
+   // Unit difficulty map
         const perUnitAgg = {};
         submissions.forEach((s) => {
           const perUnit = s.perUnit || {};
@@ -5133,10 +6432,105 @@ wrapper.appendChild(studentCard);
           distCard.appendChild(row);
         });
         wrapper.appendChild(distCard);
+  content.innerHTML = "";
+  content.appendChild(wrapper);
+}
+function renderAssignmentStatusDetail(
+  assignment,
+  statusEntry,
+  studentInfoMap,
+  parentCard
+) {
+  const existing = parentCard.querySelector(
+    "[data-role='assignment-detail']"
+  );
+  if (existing) existing.remove();
 
-        content.innerHTML = "";
-        content.appendChild(wrapper);
-      }
+  const detail = createEl(
+    "div",
+    "mt-2 border-t border-gray-100 pt-2 space-y-1",
+    []
+  );
+  detail.setAttribute("data-role", "assignment-detail");
+
+  detail.appendChild(
+    createEl("div", "flex items-center justify-between", [
+      createEl("span", "text-xs font-semibold text-gray-900", [
+        `Student status for “${assignment.title || "Untitled"}”`,
+      ]),
+      createEl("button", "text-[11px] text-gray-500 hover:underline", [
+        "Close",
+      ]),
+    ])
+  );
+
+  const closeBtn = detail.querySelector("button");
+  closeBtn.addEventListener("click", () => {
+    detail.remove();
+  });
+
+  const table = createEl(
+    "div",
+    "mt-1 max-h-64 overflow-auto border border-gray-100 rounded-lg",
+    []
+  );
+
+  const header = createEl(
+    "div",
+    "grid grid-cols-4 gap-1 px-2 py-1.5 text-[11px] font-medium bg-gray-50 text-gray-600",
+    [
+      createEl("span", "", ["Student"]),
+      createEl("span", "", ["Status"]),
+      createEl("span", "", ["Last score"]),
+      createEl("span", "", ["Last submitted"]),
+    ]
+  );
+  table.appendChild(header);
+
+  const perStudent = statusEntry.perStudent || {};
+  const rowsWrapper = createEl("div", "divide-y divide-gray-50", []);
+
+  Object.entries(perStudent).forEach(([studentId, info]) => {
+    const sub = info.lastSubmission;
+    let percent = "—";
+    if (sub && typeof sub.scorePercent === "number") {
+      percent = Math.round(sub.scorePercent) + "%";
+    }
+
+    const submittedAt =
+      sub && sub.completedAt
+        ? formatShortDateTime(
+            sub.completedAt.toDate
+              ? sub.completedAt.toDate()
+              : sub.completedAt
+          )
+        : "—";
+
+    const studentLabel =
+      studentInfoMap[studentId]?.email || studentId.slice(0, 6);
+
+    const row = createEl(
+      "div",
+      "grid grid-cols-4 gap-1 px-2 py-1.5 text-[11px] items-center",
+      [
+        createEl("span", "truncate text-gray-900", [studentLabel]),
+        createEl(
+          "span",
+          "text-gray-700",
+          [humanizeAssignmentStatus(info.status)]
+        ),
+        createEl("span", "text-gray-700", [percent]),
+        createEl("span", "text-gray-500", [submittedAt]),
+      ]
+    );
+    rowsWrapper.appendChild(row);
+  });
+
+  table.appendChild(rowsWrapper);
+  detail.appendChild(table);
+  parentCard.appendChild(detail);
+}
+
 
       // ---------------- Tabs + Navigation ----------------
       function renderTabs() {
@@ -5199,16 +6593,18 @@ wrapper.appendChild(studentCard);
             await renderStudentAnalytics();
           }
         } else {
-          if (AppState.currentTab === "dashboard") {
-            await renderTeacherDashboard();
-          } else if (AppState.currentTab === "classes") {
-            await renderTeacherClasses();
-          } else if (AppState.currentTab === "assignments") {
-            await renderTeacherAssignments();
-          } else if (AppState.currentTab === "results") {
-            await renderTeacherResults();
-          }
-        }
+  if (AppState.currentTab === "dashboard") {
+    await renderTeacherDashboard();
+  } else if (AppState.currentTab === "classes") {
+    await renderTeacherClasses();
+  } else if (AppState.currentTab === "assignments") {
+    await renderTeacherAssignments();
+  } else if (AppState.currentTab === "grades") {
+    await renderTeacherGrades();
+  } else if (AppState.currentTab === "results") {
+    await renderTeacherResults();
+  }
+}
       }
 
       // ---------------- Auth + UI wiring ----------------
