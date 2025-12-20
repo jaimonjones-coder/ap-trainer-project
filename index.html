@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -25,39 +26,68 @@
         );
         background-size: 20px 20px;
       }
-      .tab-active {
-        /* Module 3: active tab uses blue */
-        background-color: #dbeafe; /* blue-100 */
-        border-color: #2563eb; /* blue-600 */
-        color: #1d4ed8; /* blue-700 */
-      }
-      .toast-banner {
-        z-index: 9999;
-      }
-    </style>
+     .tab-active {
+  /* Module 3: active tab uses blue */
+  background-color: #dbeafe; /* blue-100 */
+  border-color: #2563eb; /* blue-600 */
+  color: #1d4ed8; /* blue-700 */
+}
+.toast-banner {
+  z-index: 9999;
+}
+
+/* ================================
+   Full-screen App Mode (after login)
+   ================================ */
+body.app-mode #page-shell {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 100vh !important;
+}
+
+body.app-mode #main-card {
+  max-width: none !important;
+  width: 100% !important;
+  min-height: 100vh !important;
+
+  /* remove “card” look so it feels native full screen */
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 0 !important;
+
+  /* IMPORTANT: prevents empty second column after left panel is hidden */
+  grid-template-columns: 1fr !important;
+}
+
+body.app-mode #left-hero {
+  display: none !important;
+}
+
+/* optional: keep a little breathing room in the app */
+body.app-mode #right-column {
+  padding: 16px !important;
+}
+</style>
 
     <!-- Firebase (compat) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   </head>
-  <body class="min-h-screen bg-gray-50">
-
+<body class="min-h-screen bg-gray-50">
+  <div id="page-shell" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div
-        </head>
-  <body class="min-h-screen bg-gray-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div
-        class="w-full max-w-6xl bg-white rounded-3xl shadow-2xl shadow-gray-200/80 overflow-hidden grid md:grid-cols-2 border border-gray-200"
-      >
-        <!-- Left / Hero -->
+      id="main-card"
+      class="w-full max-w-6xl bg-white rounded-3xl shadow-2xl shadow-gray-200/80 overflow-hidden grid md:grid-cols-2 border border-gray-200"
+    >
+      <!-- Left / Hero -->
 
       <div
+        id="left-hero"
         class="relative bg-white text-gray-900 p-8 md:p-10 flex flex-col justify-between border-b md:border-b-0 md:border-r border-gray-200"
       >
-        <div
-          class="absolute inset-0 bg-grid opacity-50 pointer-events-none"
-        ></div>
+        <div class="absolute inset-0 bg-grid opacity-50 pointer-events-none"></div>
         <div class="relative z-10 space-y-4">
           <div
             class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-medium text-blue-700 mb-4"
@@ -76,23 +106,15 @@
           </p>
 
           <div class="mt-6 grid grid-cols-3 gap-3 text-sm">
-            <div
-              class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm"
-            >
+            <div class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
               <p class="text-gray-500">Question bank</p>
               <p class="text-gray-900 font-semibold mt-1">Units 1–9</p>
             </div>
-            <div
-              class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm"
-            >
+            <div class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
               <p class="text-gray-500">Smart practice</p>
-              <p class="text-gray-900 font-semibold mt-1">
-                Weak units + SR
-              </p>
+              <p class="text-gray-900 font-semibold mt-1">Weak units + SR</p>
             </div>
-            <div
-              class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm"
-            >
+            <div class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
               <p class="text-gray-500">Analytics</p>
               <p class="text-gray-900 font-semibold mt-1">Class dashboards</p>
             </div>
@@ -105,7 +127,7 @@
       </div>
 
       <!-- Right / App Container -->
-      <div class="bg-gray-50 p-4 md:p-6 flex flex-col">
+      <div id="right-column" class="bg-gray-50 p-4 md:p-6 flex flex-col">
         <!-- Auth View -->
         <div id="auth-view" class="flex-1 flex flex-col">
           <div class="mb-4">
@@ -583,22 +605,13 @@ function formatShortDateTime(input) {
         },
 
         async listClassesForStudent(studentId) {
-          // Primary: studentIds array
-          const snap = await db
-            .collection("classes")
-            .where("studentIds", "array-contains", studentId)
-            .get();
-          const primary = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          if (primary.length) return primary;
+  const snap = await db
+    .collection("classes")
+    .where("studentIds", "array-contains", studentId)
+    .get();
 
-          // Fallback: scan for embedded students
-          const all = await db.collection("classes").get();
-          return all.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .filter((c) =>
-              (c.students || []).some((s) => s && s.id === studentId)
-            );
-        },
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+},
 
         async joinClassByCode(code, studentId, email) {
           const snap = await db
@@ -837,26 +850,36 @@ async listAssignmentsForTeacher(teacherId) {
         async getQuestions(filter = {}) {
           return DataManager.getQuestions(filter);
         },
+async getByIds(ids) {
+  if (!ids || !ids.length) return [];
 
-        async getByIds(ids) {
-          if (!ids || !ids.length) return [];
-          const chunks = [];
-          const idsCopy = ids.slice();
-          while (idsCopy.length) {
-            const batchIds = idsCopy.splice(0, 10);
-            const snap = await db
-              .collection("questions")
-              .where(
-                firebase.firestore.FieldPath.documentId(),
-                "in",
-                batchIds
-              )
-              .get();
-            snap.docs.forEach((d) => chunks.push({ id: d.id, ...d.data() }));
-          }
-          const map = new Map(chunks.map((q) => [q.id, q]));
-          return ids.map((id) => map.get(id)).filter(Boolean);
-        },
+  // 1) Pull any matching Firestore questions
+  const chunks = [];
+  const idsCopy = ids.slice();
+  while (idsCopy.length) {
+    const batchIds = idsCopy.splice(0, 10).filter(Boolean);
+    if (!batchIds.length) continue;
+
+    const snap = await db
+      .collection("questions")
+      .where(firebase.firestore.FieldPath.documentId(), "in", batchIds)
+      .get();
+
+    snap.docs.forEach((d) => chunks.push({ id: d.id, ...d.data() }));
+  }
+
+  const map = new Map(chunks.map((q) => [q.id, q]));
+
+  // 2) ✅ Fallback: also allow local seed questions by id (seed-1, seed-2, ...)
+  // Passing null returns ALL seeds in your implementation.
+  const seeds = this.seedQuestions(null);
+  seeds.forEach((q) => map.set(q.id, q));
+
+  // 3) Preserve requested order; drop anything still missing
+  return ids.map((id) => map.get(id)).filter(Boolean);
+},
+        
+
 
         seedQuestions(unitFilter) {
           const seed = [
@@ -1454,7 +1477,13 @@ async function openQuestionLibrary() {
           .filter((v) => v)
       )
     ).sort((a, b) => a.localeCompare(b));
-
+const standardValues = Array.from(
+  new Set(
+    allQuestions
+      .map((q) => (q.standardCode || "").trim())
+      .filter((v) => v)
+  )
+).sort((a, b) => a.localeCompare(b));
     const diffValues = Array.from(
       new Set(
         allQuestions
@@ -1504,6 +1533,17 @@ async function openQuestionLibrary() {
       opt.textContent = s;
       skillSelect.appendChild(opt);
     });
+// Topic/standard select
+const standardLabelEl = createEl("span", "text-gray-600", ["Topic/standard"]);
+const standardSelect = document.createElement("select");
+standardSelect.className =
+  "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+const standardAllOpt = document.createElement("option");
+standardAllOpt.value = "";
+standardAllOpt.textContent = "All topics";
+standardSelect.appendChild(standardAllOpt);
+// Options will be filled based on the selected unit (see refreshUnitDependentFilters())
 
     // Difficulty select
     const diffLabelEl = createEl("span", "text-gray-600", ["Difficulty"]);
@@ -1522,17 +1562,106 @@ async function openQuestionLibrary() {
     });
 
     filterRow.appendChild(unitLabelEl);
-    filterRow.appendChild(unitSelect);
-    filterRow.appendChild(skillLabelEl);
-    filterRow.appendChild(skillSelect);
-    filterRow.appendChild(diffLabelEl);
-    filterRow.appendChild(diffSelect);
+filterRow.appendChild(unitSelect);
 
-    wrapper.appendChild(filterRow);
+filterRow.appendChild(skillLabelEl);
+filterRow.appendChild(skillSelect);
+
+filterRow.appendChild(standardLabelEl);
+filterRow.appendChild(standardSelect);
+
+filterRow.appendChild(diffLabelEl);
+filterRow.appendChild(diffSelect);
+
+wrapper.appendChild(filterRow);
 
     const summary = createEl("p", "text-sm text-gray-600", [""]);
     wrapper.appendChild(summary);
+// Bulk selection + delete (multi-delete)
+const selectedIds = new Set();
+let lastFilteredIds = [];
 
+const bulkBar = createEl("div", "flex flex-wrap items-center gap-2 mt-2", []);
+const selectedCountEl = createEl("span", "text-sm text-gray-600", ["0 selected"]);
+const selectAllBtn = createEl(
+  "button",
+  "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
+  ["Select all (filtered)"]
+);
+const clearSelectedBtn = createEl(
+  "button",
+  "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
+  ["Clear"]
+);
+const deleteSelectedBtn = createEl(
+  "button",
+  "px-2 py-1 text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50",
+  ["Delete selected"]
+);
+
+bulkBar.appendChild(selectedCountEl);
+bulkBar.appendChild(selectAllBtn);
+bulkBar.appendChild(clearSelectedBtn);
+bulkBar.appendChild(deleteSelectedBtn);
+wrapper.appendChild(bulkBar);
+
+function updateBulkBar() {
+  selectedCountEl.textContent = `${selectedIds.size} selected`;
+  const disabled = selectedIds.size === 0;
+  deleteSelectedBtn.disabled = disabled;
+  clearSelectedBtn.disabled = disabled;
+  deleteSelectedBtn.classList.toggle("opacity-50", disabled);
+  deleteSelectedBtn.classList.toggle("cursor-not-allowed", disabled);
+  clearSelectedBtn.classList.toggle("opacity-50", disabled);
+  clearSelectedBtn.classList.toggle("cursor-not-allowed", disabled);
+}
+
+selectAllBtn.addEventListener("click", () => {
+  lastFilteredIds.forEach((id) => selectedIds.add(id));
+  updateBulkBar();
+  renderQuestionLibraryList();
+});
+
+clearSelectedBtn.addEventListener("click", () => {
+  selectedIds.clear();
+  updateBulkBar();
+  renderQuestionLibraryList();
+});
+
+deleteSelectedBtn.addEventListener("click", async () => {
+  const ids = Array.from(selectedIds);
+  if (!ids.length) return;
+
+  const ok = window.confirm(
+    `Delete ${ids.length} question${ids.length === 1 ? "" : "s"} from your bank?`
+  );
+  if (!ok) return;
+
+  deleteSelectedBtn.disabled = true;
+  try {
+    for (const id of ids) {
+      await DataManager.deleteQuestion(id);
+      const idx = allQuestions.findIndex((qq) => qq.id === id);
+      if (idx !== -1) allQuestions.splice(idx, 1);
+    }
+    selectedIds.clear();
+    Toast.show(
+      `Deleted ${ids.length} question${ids.length === 1 ? "" : "s"}.`,
+      "success"
+    );
+    if (typeof refreshUnitDependentFilters === "function") {
+      refreshUnitDependentFilters();
+    }
+    renderQuestionLibraryList();
+  } catch (err) {
+    console.error("Bulk delete error", err);
+    Toast.show("Could not delete selected questions.", "error");
+  } finally {
+    updateBulkBar();
+  }
+});
+
+updateBulkBar();
     const list = createEl(
       "div",
       "divide-y divide-gray-100 border border-gray-100 rounded-lg bg-white",
@@ -1546,7 +1675,7 @@ async function openQuestionLibrary() {
       const unitVal = unitSelect.value;
       const skillVal = skillSelect.value;
       const diffVal = diffSelect.value;
-
+      const standardVal = standardSelect.value;
       if (unitVal) {
         filtered = filtered.filter(
           (q) => String(q.unit || "") === unitVal
@@ -1557,6 +1686,11 @@ async function openQuestionLibrary() {
           (q) => (q.skill || "").trim() === skillVal
         );
       }
+      if (standardVal) {
+  filtered = filtered.filter(
+    (q) => (q.standardCode || "").trim() === standardVal
+  );
+}
       if (diffVal) {
         filtered = filtered.filter(
           (q) => (q.difficulty || "").trim() === diffVal
@@ -1575,23 +1709,24 @@ async function openQuestionLibrary() {
         return 0;
       });
 
-      list.innerHTML = "";
+lastFilteredIds = filtered.map((q) => q.id);
 
+list.innerHTML = "";
+updateBulkBar();
       summary.textContent = `Showing ${
         filtered.length
       } question${
         filtered.length === 1 ? "" : "s"
       }. Use filters or Edit / Delete to manage your bank.`;
-
-      if (!filtered.length) {
-        list.appendChild(
-          createEl("p", "text-sm text-gray-500 px-3 py-2", [
-            "No questions match your filters. Try changing the unit, skill, or difficulty.",
-          ])
-        );
-        return;
-      }
-
+if (!filtered.length) {
+  list.appendChild(
+    createEl("p", "text-sm text-gray-500 px-3 py-2", [
+      "No questions match your filters. Try changing the unit, topic, skill, or difficulty.",
+    ])
+  );
+  return;
+}
+     
       filtered.forEach((q) => {
         const row = createEl(
           "div",
@@ -1600,10 +1735,10 @@ async function openQuestionLibrary() {
         );
 
         const unitLabel =
-          q.unit != null ? "Unit " + q.unit : "Unit ?";
-        const skillLabel = q.skill ? " · " + q.skill : "";
-        const diffLabel = q.difficulty ? " · " + q.difficulty : "";
-
+  q.unit != null ? "Unit " + q.unit : "Unit ?";
+const stdLabel = q.standardCode ? " · " + q.standardCode : "";
+const skillLabel = q.skill ? " · " + q.skill : "";
+const diffLabel = q.difficulty ? " · " + q.difficulty : "";
         const titleText =
           q.question && q.question.length > 160
             ? q.question.slice(0, 157) + "…"
@@ -1614,7 +1749,7 @@ async function openQuestionLibrary() {
             titleText,
           ]),
           createEl("p", "text-xs text-gray-500", [
-            unitLabel + skillLabel + diffLabel,
+unitLabel + stdLabel + skillLabel + diffLabel,
           ]),
         ]);
 
@@ -1690,32 +1825,96 @@ async function openQuestionLibrary() {
           if (!ok) return;
           try {
             await DataManager.deleteQuestion(q.id);
-            const idx = allQuestions.findIndex(
-              (qq) => qq.id === q.id
-            );
-            if (idx !== -1) {
-              allQuestions.splice(idx, 1);
-            }
-            Toast.show("Question deleted.", "success");
-            renderQuestionLibraryList();
+const idx = allQuestions.findIndex((qq) => qq.id === q.id);
+if (idx !== -1) {
+  allQuestions.splice(idx, 1);
+}
+
+// ✅ keep bulk selection state consistent
+selectedIds.delete(q.id);
+updateBulkBar();
+
+// ✅ optional: keep unit/topic dropdowns accurate after deletes
+if (typeof refreshUnitDependentFilters === "function") {
+  refreshUnitDependentFilters();
+}
+
+Toast.show("Question deleted.", "success");
+renderQuestionLibraryList();
           } catch (err) {
             console.error("Delete question error", err);
             Toast.show("Could not delete question.", "error");
           }
         });
 
-        row.appendChild(left);
-        row.appendChild(btnRow);
-        list.appendChild(row);
+        const checkbox = document.createElement("input");
+checkbox.type = "checkbox";
+checkbox.className = "mt-1";
+checkbox.checked = selectedIds.has(q.id);
+checkbox.addEventListener("change", () => {
+  if (checkbox.checked) selectedIds.add(q.id);
+  else selectedIds.delete(q.id);
+  updateBulkBar();
+});
+
+const leftWrap = createEl("div", "flex items-start gap-2 flex-1", []);
+leftWrap.appendChild(checkbox);
+leftWrap.appendChild(left);
+
+row.appendChild(leftWrap);
+row.appendChild(btnRow);
+list.appendChild(row);
       });
     }
+function fillSelectOptions(selectEl, allLabel, values) {
+  const prev = selectEl.value;
+  selectEl.innerHTML = "";
 
-    unitSelect.addEventListener("change", renderQuestionLibraryList);
-    skillSelect.addEventListener("change", renderQuestionLibraryList);
-    diffSelect.addEventListener("change", renderQuestionLibraryList);
+  const allOpt = document.createElement("option");
+  allOpt.value = "";
+  allOpt.textContent = allLabel;
+  selectEl.appendChild(allOpt);
 
-    renderQuestionLibraryList();
+  values.forEach((v) => {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    selectEl.appendChild(opt);
+  });
 
+  // keep selection if still valid
+  if (prev && values.includes(prev)) selectEl.value = prev;
+  else selectEl.value = "";
+}
+
+function refreshUnitDependentFilters() {
+  const unitVal = unitSelect.value;
+  const subset = unitVal
+    ? allQuestions.filter((q) => String(q.unit || "") === unitVal)
+    : allQuestions;
+
+  const unitStandards = Array.from(
+    new Set(subset.map((q) => (q.standardCode || "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const unitSkills = Array.from(
+    new Set(subset.map((q) => (q.skill || "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+
+  fillSelectOptions(standardSelect, "All topics", unitStandards);
+  fillSelectOptions(skillSelect, "All skills", unitSkills);
+}
+    unitSelect.addEventListener("change", () => {
+  refreshUnitDependentFilters();
+  renderQuestionLibraryList();
+});
+skillSelect.addEventListener("change", renderQuestionLibraryList);
+diffSelect.addEventListener("change", renderQuestionLibraryList);
+standardSelect.addEventListener("change", renderQuestionLibraryList);
+
+// initial populate + initial render
+refreshUnitDependentFilters();
+renderQuestionLibraryList();
     body.appendChild(wrapper);
   } catch (e) {
     console.error("Question library load error", e);
@@ -2520,16 +2719,16 @@ async function finishQuiz(autoFromTimer) {
           if (isCorrect) perUnit[unit].correct += 1;
 
           if (AppState.user) {
-            try {
-              SpacedRepetition.updateAfterAnswer(
-                AppState.user.uid,
-                q.id,
-                isCorrect
-              );
-            } catch (e) {
-              console.error("SR update error", e);
-            }
-          }
+  try {
+    await SpacedRepetition.updateAfterAnswer(
+      AppState.user.uid,
+      q.id,
+      isCorrect
+    );
+  } catch (e) {
+    console.error("SR update error", e);
+  }
+}
           questionResults.push({
             questionId: q.id,
             question: q.question,
@@ -4442,92 +4641,94 @@ const countInput = createEl(
     .filter((l) => l && !l.startsWith("#"));
 
   const questions = [];
+lines.forEach((line, idx) => {
+  const parts = line.split("|").map((p) => p.trim());
+  // Minimum 10 fields required
+  if (parts.length < 10) {
+    console.warn("Skipping short line", idx + 1, line);
+    return;
+  }
 
-  lines.forEach((line, idx) => {
-    const parts = line.split("|").map((p) => p.trim());
-    // Minimum 10 fields required
-    if (parts.length < 10) {
-      console.warn("Skipping short line", idx + 1, line);
-      return;
+  const [
+    unitStr,
+    skill,
+    difficultyRaw,
+    question,
+    A,
+    B,
+    C,
+    D,
+    correctRaw,
+    explanation,
+  ] = parts;
+
+  const unitNum = Number(unitStr);
+  if (!unitNum || !question) {
+    console.warn("Skipping invalid unit/question on line", idx + 1);
+    return;
+  }
+
+  const options = [A, B, C, D].map((v) => v || "");
+
+  // Normalize difficulty
+  let difficulty = (difficultyRaw || "").toLowerCase();
+  if (difficulty.startsWith("stand")) difficulty = "standard";
+  else if (difficulty.startsWith("chall")) difficulty = "challenging";
+  else if (difficulty.startsWith("extreme")) difficulty = "extreme";
+  else difficulty = "standard";
+
+  // Correct answer: can be A/B/C/D or 1/2/3/4
+  const cRaw = (correctRaw || "").toString().trim().toUpperCase();
+  let correctIndex = ["A", "B", "C", "D"].indexOf(cRaw);
+  if (correctIndex === -1) {
+    const n = Number(cRaw);
+    if (!isNaN(n) && n >= 1 && n <= 4) {
+      correctIndex = n - 1;
     }
+  }
+  if (correctIndex < 0 || correctIndex > 3) {
+    console.warn("Skipping row with invalid correct column", idx + 1);
+    return;
+  }
 
-    const [
-      unitStr,
-      skill,
-      difficultyRaw,
-      question,
-      A,
-      B,
-      C,
-      D,
-      correctRaw,
-      explanation,
-    ] = parts;
+  // Optional per-choice explanations: ExpA, ExpB, ExpC, ExpD
+  const expA = parts[10] ? parts[10].trim() : "";
+  const expB = parts[11] ? parts[11].trim() : "";
+  const expC = parts[12] ? parts[12].trim() : "";
+  const expD = parts[13] ? parts[13].trim() : "";
+  const standardCode = parts[14] ? parts[14].trim() : "";
 
-    const unitNum = Number(unitStr);
-    if (!unitNum || !question) {
-      console.warn("Skipping invalid unit/question on line", idx + 1);
-      return;
-    }
+  const distractorNotes = {};
+  if (expA) distractorNotes["A"] = expA;
+  if (expB) distractorNotes["B"] = expB;
+  if (expC) distractorNotes["C"] = expC;
+  if (expD) distractorNotes["D"] = expD;
 
-    const options = [A, B, C, D].map((v) => v || "");
+  questions.push({
+    unit: unitNum,
+    skill: skill || "",
+    difficulty,
+    standardCode: standardCode || "",
 
-    // Normalize difficulty
-    let difficulty = (difficultyRaw || "").toLowerCase();
-    if (difficulty.startsWith("stand")) difficulty = "standard";
-    else if (difficulty.startsWith("chall")) difficulty = "challenging";
-    else if (difficulty.startsWith("extreme")) difficulty = "extreme";
-    else difficulty = "standard";
+    question,
+    options,
+    correctIndex,
 
-    // Correct answer: can be A/B/C/D or 1/2/3/4
-    const cRaw = (correctRaw || "").toString().trim().toUpperCase();
-    let correctIndex = ["A", "B", "C", "D"].indexOf(cRaw);
-    if (correctIndex === -1) {
-      const n = Number(cRaw);
-      if (!isNaN(n) && n >= 1 && n <= 4) {
-        correctIndex = n - 1;
-      }
-    }
-    if (correctIndex < 0 || correctIndex > 3) {
-      console.warn("Skipping row with invalid correct column", idx + 1);
-      return;
-    }
-
-    // Optional per-choice explanations: ExpA, ExpB, ExpC, ExpD
-    const expA = parts[10] || "";
-    const expB = parts[11] || "";
-    const expC = parts[12] || "";
-    const expD = parts[13] || "";
-
-    const distractorNotes = {};
-    if (expA) distractorNotes["A"] = expA;
-    if (expB) distractorNotes["B"] = expB;
-    if (expC) distractorNotes["C"] = expC;
-    if (expD) distractorNotes["D"] = expD;
-
-    questions.push({
-      unit: unitNum,
-      skill: skill || "",
-      difficulty,
-      question,
-      options,
-      correctIndex,
-      // "Magic" explanations:
-      // - explanation = why the correct answer is correct (global)
-      // - distractorNotes = per-choice explanation (A–D)
-      explanation: explanation || "",
-      distractorNotes:
-        Object.keys(distractorNotes).length > 0 ? distractorNotes : null,
-      createdBy: teacherId,
-      source: "batch-upload",
-    });
+    // "Magic" explanations:
+    // - explanation = why the correct answer is correct (global)
+    // - distractorNotes = per-choice explanation (A–D)
+    explanation: explanation || "",
+    distractorNotes:
+      Object.keys(distractorNotes).length > 0 ? distractorNotes : null,
+    createdBy: teacherId,
+    source: "batch-upload",
   });
-
-  return questions;
+}); 
+return questions;
 }
 
-
       async function renderTeacherAssignments() {
+
         const content = $("tab-content");
         content.innerHTML =
           "<p class='text-sm text-gray-500'>Loading assignments…</p>";
@@ -4931,114 +5132,121 @@ function openQuestionPicker() {
   document.body.appendChild(overlay);
 
   let allQuestions = [];
-  let unitSelect, skillSelect, diffSelect;
+  let unitSelect, skillSelect, standardSelect, diffSelect;
   let list;
 
-  function renderPickerList() {
-    if (!allQuestions.length || !list) return;
-    let filtered = allQuestions.slice();
+function renderPickerList() {
+  let filtered = allQuestions.slice();
 
-    const unitVal = unitSelect ? unitSelect.value : "";
-    const skillVal = skillSelect ? skillSelect.value : "";
-    const diffVal = diffSelect ? diffSelect.value : "";
+  const unitVal = unitSelect.value;
+  const skillVal = skillSelect.value;
+  const standardVal = standardSelect.value;
+  const diffVal = diffSelect.value;
 
-    if (unitVal) {
-      filtered = filtered.filter(
-        (q) => String(q.unit || "") === unitVal
-      );
-    }
-    if (skillVal) {
-      filtered = filtered.filter(
-        (q) => (q.skill || "").trim() === skillVal
-      );
-    }
-    if (diffVal) {
-      filtered = filtered.filter(
-        (q) => (q.difficulty || "").trim() === diffVal
-      );
-    }
-
-    filtered.sort((a, b) => {
-      const ua = typeof a.unit === "number" ? a.unit : 0;
-      const ub = typeof b.unit === "number" ? b.unit : 0;
-      if (ua !== ub) return ua - ub;
-      const sa = (a.skill || "").toLowerCase();
-      const sb = (b.skill || "").toLowerCase();
-      if (sa < sb) return -1;
-      if (sa > sb) return 1;
-      const qa = (a.question || "").toLowerCase();
-      const qb = (b.question || "").toLowerCase();
-      if (qa < qb) return -1;
-      if (qa > qb) return 1;
-      return 0;
-    });
-
-    list.innerHTML = "";
-
-    if (!filtered.length) {
-      list.appendChild(
-        createEl("p", "text-sm text-gray-500", [
-          "No questions match your filters. Try changing the unit, skill, or difficulty.",
-        ])
-      );
-    } else {
-      filtered.forEach((q) => {
-        const row = createEl(
-          "label",
-          "flex items-start gap-2 border border-gray-200 rounded-lg px-2 py-1",
-          []
-        );
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.className = "mt-1 h-3 w-3 text-blue-600";
-        cb.value = q.id;
-        cb.checked = currentCustomQuestionIds.includes(q.id);
-        cb.addEventListener("change", () => {
-          if (cb.checked) {
-            if (!currentCustomQuestionIds.includes(q.id)) {
-              currentCustomQuestionIds.push(q.id);
-            }
-          } else {
-            currentCustomQuestionIds = currentCustomQuestionIds.filter(
-              (x) => x !== q.id
-            );
-          }
-          summary.textContent = `${
-            currentCustomQuestionIds.length
-          } question${
-            currentCustomQuestionIds.length === 1 ? "" : "s"
-          } selected. Showing ${
-            filtered.length
-          } question${
-            filtered.length === 1 ? "" : "s"
-          } in this view.`;
-        });
-        row.appendChild(cb);
-        const text = createEl("div", "flex-1", [
-          createEl("p", "text-sm text-gray-800", [q.question]),
-          createEl("p", "text-xs text-gray-500 mt-0.5", [
-            `Unit ${q.unit || "?"}${
-              q.skill ? " · " + q.skill : ""
-            }${
-              q.difficulty ? " · " + q.difficulty : ""
-            }`,
-          ]),
-        ]);
-        row.appendChild(text);
-        list.appendChild(row);
-      });
-    }
-
-    summary.textContent = `${
-      currentCustomQuestionIds.length
-    } question${
-      currentCustomQuestionIds.length === 1 ? "" : "s"
-    } selected. Showing ${
-      filtered.length
-    } question${
-      filtered.length === 1 ? "" : "s"
-    } in this view.`;
+  if (unitVal) {
+    filtered = filtered.filter((q) => String(q.unit || "") === unitVal);
   }
+  if (standardVal) {
+    filtered = filtered.filter(
+      (q) => (q.standardCode || "").trim() === standardVal
+    );
+  }
+  if (skillVal) {
+    filtered = filtered.filter((q) => (q.skill || "").trim() === skillVal);
+  }
+  if (diffVal) {
+    filtered = filtered.filter(
+      (q) => (q.difficulty || "").trim() === diffVal
+    );
+  }
+
+  filtered.sort((a, b) => {
+    const ua = typeof a.unit === "number" ? a.unit : 0;
+    const ub = typeof b.unit === "number" ? b.unit : 0;
+    if (ua !== ub) return ua - ub;
+
+    const ta = (a.standardCode || "").toLowerCase();
+    const tb = (b.standardCode || "").toLowerCase();
+    if (ta < tb) return -1;
+    if (ta > tb) return 1;
+
+    const sa = (a.skill || "").toLowerCase();
+    const sb = (b.skill || "").toLowerCase();
+    if (sa < sb) return -1;
+    if (sa > sb) return 1;
+
+    const qa = (a.question || "").toLowerCase();
+    const qb = (b.question || "").toLowerCase();
+    if (qa < qb) return -1;
+    if (qa > qb) return 1;
+    return 0;
+  });
+
+  list.innerHTML = "";
+
+  if (!filtered.length) {
+    list.appendChild(
+      createEl("p", "text-sm text-gray-500", [
+        "No questions match your filters. Try changing the unit, topic, skill, or difficulty.",
+      ])
+    );
+  } else {
+    filtered.forEach((q) => {
+      const row = createEl(
+        "label",
+        "flex items-start gap-2 border border-gray-200 rounded-lg px-2 py-1",
+        []
+      );
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "mt-1 h-3 w-3 text-blue-600";
+      cb.value = q.id;
+      cb.checked = currentCustomQuestionIds.includes(q.id);
+
+      cb.addEventListener("change", () => {
+        if (cb.checked) {
+          if (!currentCustomQuestionIds.includes(q.id)) {
+            currentCustomQuestionIds.push(q.id);
+          }
+        } else {
+          currentCustomQuestionIds = currentCustomQuestionIds.filter(
+            (x) => x !== q.id
+          );
+        }
+        summary.textContent = `${
+          currentCustomQuestionIds.length
+        } question${
+          currentCustomQuestionIds.length === 1 ? "" : "s"
+        } selected. Showing ${
+          filtered.length
+        } question${filtered.length === 1 ? "" : "s"} in this view.`;
+      });
+
+      row.appendChild(cb);
+
+      const text = createEl("div", "flex-1", [
+        createEl("p", "text-sm text-gray-800", [q.question]),
+        createEl("p", "text-xs text-gray-500 mt-0.5", [
+          `Unit ${q.unit || "?"}${
+            q.standardCode ? " · " + q.standardCode : ""
+          }${q.skill ? " · " + q.skill : ""}${
+            q.difficulty ? " · " + q.difficulty : ""
+          }`,
+        ]),
+      ]);
+
+      row.appendChild(text);
+      list.appendChild(row);
+    });
+  }
+
+  summary.textContent = `${
+    currentCustomQuestionIds.length
+  } question${currentCustomQuestionIds.length === 1 ? "" : "s"} selected. Showing ${
+    filtered.length
+  } question${filtered.length === 1 ? "" : "s"} in this view.`;
+}
 
   QuestionService.getQuestions()
     .then((qs) => {
@@ -5087,7 +5295,13 @@ function openQuestionPicker() {
             .filter((v) => v)
         )
       ).sort((a, b) => a.localeCompare(b));
-
+const standardValues = Array.from(
+  new Set(
+    allQuestions
+      .map((q) => (q.standardCode || "").trim())
+      .filter((v) => v)
+  )
+).sort((a, b) => a.localeCompare(b));
       const diffValues = Array.from(
         new Set(
           allQuestions
@@ -5127,7 +5341,18 @@ function openQuestionPicker() {
         opt.textContent = s;
         skillSelect.appendChild(opt);
       });
+// Topic/standard select
+const standardLabelEl = createEl("span", "text-gray-600", ["Topic/standard"]);
+standardSelect = document.createElement("select"); // ✅ assign to the outer variable renderPickerList uses
+standardSelect.className =
+  "px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+const standardAllOpt = document.createElement("option");
+standardAllOpt.value = "";
+standardAllOpt.textContent = "All topics";
+standardSelect.appendChild(standardAllOpt);
+
+// Options will be filled based on the selected unit (see refreshPickerUnitDependentFilters())
       // Difficulty select
       const diffLabelEl = createEl("span", "text-gray-600", ["Difficulty"]);
       diffSelect = document.createElement("select");
@@ -5145,22 +5370,70 @@ function openQuestionPicker() {
       });
 
       filterRow.appendChild(unitLabelEl);
-      filterRow.appendChild(unitSelect);
-      filterRow.appendChild(skillLabelEl);
-      filterRow.appendChild(skillSelect);
-      filterRow.appendChild(diffLabelEl);
-      filterRow.appendChild(diffSelect);
+filterRow.appendChild(unitSelect);
+
+filterRow.appendChild(skillLabelEl);
+filterRow.appendChild(skillSelect);
+
+filterRow.appendChild(standardLabelEl);
+filterRow.appendChild(standardSelect);
+
+filterRow.appendChild(diffLabelEl);
+filterRow.appendChild(diffSelect);
 
       body.appendChild(filterRow);
 
       list = createEl("div", "space-y-1", []);
       body.appendChild(list);
+function fillPickerSelectOptions(selectEl, allLabel, values) {
+  const prev = selectEl.value;
+  selectEl.innerHTML = "";
 
-      unitSelect.addEventListener("change", renderPickerList);
-      skillSelect.addEventListener("change", renderPickerList);
-      diffSelect.addEventListener("change", renderPickerList);
+  const allOpt = document.createElement("option");
+  allOpt.value = "";
+  allOpt.textContent = allLabel;
+  selectEl.appendChild(allOpt);
 
-      renderPickerList();
+  values.forEach((v) => {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    selectEl.appendChild(opt);
+  });
+
+  if (prev && values.includes(prev)) selectEl.value = prev;
+  else selectEl.value = "";
+}
+
+function refreshPickerUnitDependentFilters() {
+  const unitVal = unitSelect.value;
+  const subset = unitVal
+    ? allQuestions.filter((q) => String(q.unit || "") === unitVal)
+    : allQuestions;
+
+  const unitStandards = Array.from(
+    new Set(subset.map((q) => (q.standardCode || "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const unitSkills = Array.from(
+    new Set(subset.map((q) => (q.skill || "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+
+  fillPickerSelectOptions(standardSelect, "All topics", unitStandards);
+  fillPickerSelectOptions(skillSelect, "All skills", unitSkills);
+}
+unitSelect.addEventListener("change", () => {
+  refreshPickerUnitDependentFilters();
+  renderPickerList();
+});
+skillSelect.addEventListener("change", renderPickerList);
+diffSelect.addEventListener("change", renderPickerList);
+standardSelect.addEventListener("change", renderPickerList);
+
+// initial populate + first render
+refreshPickerUnitDependentFilters();
+renderPickerList();
+
     })
     .catch((e) => {
       console.error("Question picker load error", e);
@@ -5437,89 +5710,88 @@ recentCard.appendChild(card);
 
         wrapper.appendChild(recentCard);
 
-        // Batch Question Uploader
-        const batchCard = createEl(
-          "div",
-          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
-          []
-        );
-        batchCard.appendChild(
-          createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
-            "Batch Question Uploader",
-          ])
-        );
-        batchCard.appendChild(
-          createEl("p", "text-sm text-gray-600", [
-            "Paste questions using the format:",
-            " Unit | Skill | Difficulty | Question | A | B | C | D | Correct | Explanation",
-          ])
-        );
-        batchCard.appendChild(
-          createEl("p", "text-sm text-gray-500", [
-            "Example:",
-            " 1 | Concept Application | Standard | In classical conditioning, the unlearned response is called the: | UR | CR | CS | UCS | A | The unconditioned response (UR) is the automatic, unlearned response.",
-          ])
-        );
-        const textarea = createEl(
-          "textarea",
-          "w-full min-h-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-sm font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
-          []
-        );
-        textarea.placeholder =
-          "Unit | Skill | Difficulty | Question | A | B | C | D | Correct | Explanation\n1 | Concept Application | Standard | ...";
-        batchCard.appendChild(textarea);
+       // Batch Question Uploader
+const batchCard = createEl(
+  "div",
+  "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
+  []
+);
+batchCard.appendChild(
+  createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
+    "Batch Question Uploader",
+  ])
+);
+batchCard.appendChild(
+  createEl("p", "text-sm text-gray-600", [
+    "Paste questions using the format:",
+    " Unit | Skill | Difficulty | Question | A | B | C | D | Correct | Explanation | ExpA | ExpB | ExpC | ExpD | Topic/standard (e.g. 7.3 Emotion)",
+  ])
+);
+batchCard.appendChild(
+  createEl("p", "text-sm text-gray-500", [
+    "Example:",
+    " 1 | Concept Application | Standard | In classical conditioning, the unlearned response is called the: | UR | CR | CS | UCS | A | The unconditioned response (UR) is the automatic, unlearned response.",
+  ])
+);
 
-        const batchFooter = createEl(
-          "div",
-          "flex items-center justify-between mt-2 text-sm",
-          []
-        );
-        const batchStatus = createEl(
-          "span",
-          "text-sm text-gray-500",
-          ["No upload yet."]
-        );
-        const batchBtn = createEl(
-          "button",
-          "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-          ["Upload questions"]
-        );
-        batchBtn.addEventListener("click", async () => {
-          const raw = textarea.value;
-          const questions = parseBatchQuestions(raw, teacherId);
-          if (!questions.length) {
-            Toast.show(
-              "No valid questions found. Check your formatting.",
-              "error"
-            );
-            batchStatus.textContent =
-              "No valid questions parsed. Check formatting.";
-            return;
-          }
-          try {
-            batchBtn.disabled = true;
-            batchBtn.textContent = "Uploading…";
-            const { created } =
-              await DataManager.batchUploadQuestions(questions);
-            Toast.show(`Uploaded ${created} questions.`, "success");
-            batchStatus.textContent = `Uploaded ${created} questions successfully.`;
-          } catch (e) {
-            console.error("Batch upload error", e);
-            Toast.show(
-              e.message || "Error uploading questions. Check Firestore rules.",
-              "error"
-            );
-            batchStatus.textContent = "Upload failed.";
-          } finally {
-            batchBtn.disabled = false;
-            batchBtn.textContent = "Upload questions";
-          }
-        });
-        batchFooter.appendChild(batchStatus);
-        batchFooter.appendChild(batchBtn);
-        batchCard.appendChild(batchFooter);
+const textarea = createEl(
+  "textarea",
+  "w-full min-h-[160px] px-2 py-1.5 border border-gray-300 rounded-lg text-sm font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+  []
+);
+textarea.placeholder =
+  "Unit | Skill | Difficulty | Question | A | B | C | D | Correct | Explanation | ExpA | ExpB | ExpC | ExpD | Topic/standard\n1 | Concept Application | Standard | ...";
+batchCard.appendChild(textarea);
 
-        wrapper.appendChild(batchCard);
+const batchFooter = createEl(
+  "div",
+  "flex items-center justify-between mt-2 text-sm",
+  []
+);
+const batchStatus = createEl("span", "text-sm text-gray-500", [
+  "No upload yet.",
+]);
+const batchBtn = createEl(
+  "button",
+  "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+  ["Upload questions"]
+);
+batchBtn.addEventListener("click", async () => {
+  const raw = textarea.value;
+  const questions = parseBatchQuestions(raw, teacherId);
+
+  if (!questions.length) {
+    Toast.show("No valid questions found. Check your formatting.", "error");
+    batchStatus.textContent = "No valid questions parsed. Check formatting.";
+    return;
+  }
+
+  try {
+    batchBtn.disabled = true;
+    batchBtn.textContent = "Uploading…";
+
+    const { created } = await DataManager.batchUploadQuestions(questions);
+
+    Toast.show(`Uploaded ${created} questions.`, "success");
+    batchStatus.textContent = `Uploaded ${created} questions successfully.`;
+  } catch (e) {
+    console.error("Batch upload error", e);
+    Toast.show(
+      e.message || "Error uploading questions. Check Firestore rules.",
+      "error"
+    );
+    batchStatus.textContent = "Upload failed.";
+  } finally {
+    batchBtn.disabled = false;
+    batchBtn.textContent = "Upload questions";
+  }
+});
+
+batchFooter.appendChild(batchStatus);
+batchFooter.appendChild(batchBtn);
+batchCard.appendChild(batchFooter);
+
+wrapper.appendChild(batchCard);
 
         content.innerHTML = "";
         content.appendChild(wrapper);
@@ -6609,9 +6881,12 @@ function renderAssignmentStatusDetail(
 
       // ---------------- Auth + UI wiring ----------------
       function showAppView(show) {
-        $("auth-view").classList.toggle("hidden", !!show);
-        $("app-view").classList.toggle("hidden", !show);
-      }
+  $("auth-view").classList.toggle("hidden", !!show);
+  $("app-view").classList.toggle("hidden", !show);
+
+  // ✅ Full-screen mode after login
+  document.body.classList.toggle("app-mode", !!show);
+}
 
       function updateRoleToggleUI() {
         const studentBtn = $("role-student");
@@ -6769,4 +7044,3 @@ function renderAssignmentStatusDetail(
     </script>
   </body>
 </html>
-
