@@ -420,6 +420,62 @@ function createElHTML(tag, className = "", html = "") {
   }
   return el;
 }
+// Difficulty normalizer (handles legacy field names + shorthand values)
+function normalizeDifficulty(raw) {
+  const s = (raw ?? "").toString().trim().toLowerCase();
+  if (!s) return "standard";
+
+  // Easy
+  if (
+    s === "1" ||
+    s === "e" ||
+    s === "easy" ||
+    s === "basic" ||
+    s === "beginner" ||
+    s.startsWith("easy")
+  ) {
+    return "easy";
+  }
+
+  // Standard (middle)
+  if (
+    s === "2" ||
+    s === "s" ||
+    s === "std" ||
+    s === "standard" ||
+    s === "normal" ||
+    s === "medium" ||
+    s === "moderate" ||
+    s.startsWith("stand")
+  ) {
+    return "standard";
+  }
+
+  // Hard (also absorbs older labels)
+  if (
+    s === "3" ||
+    s === "h" ||
+    s === "hard" ||
+    s === "very hard" ||
+    s === "advanced" ||
+    s === "challenging" ||
+    s.startsWith("chall") ||
+    s === "extreme" ||
+    s.startsWith("ext")
+  ) {
+    return "hard";
+  }
+
+  // Unknown label => default
+  return "standard";
+}
+
+// Pretty label for UI
+function formatDifficultyLabel(raw) {
+  const d = normalizeDifficulty(raw);
+  return d.charAt(0).toUpperCase() + d.slice(1);
+}
+
       const Toast = {
         show(message, type = "info") {
           const existing = document.querySelector(".toast-banner");
@@ -767,7 +823,13 @@ async listAssignmentsForTeacher(teacherId) {
             ref = ref.where("unit", "==", filter.unit);
           }
           const snap = await ref.get();
-          const qs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+const qs = snap.docs.map((d) => {
+  const q = { id: d.id, ...d.data() };
+  q.difficulty = normalizeDifficulty(
+    q.difficulty ?? q.difficultyLevel ?? q.level ?? q.Difficulty
+  );
+  return q;
+});
           if (!qs.length) return QuestionService.seedQuestions(filter.unit);
           return qs;
         },
@@ -865,7 +927,13 @@ async getByIds(ids) {
       .where(firebase.firestore.FieldPath.documentId(), "in", batchIds)
       .get();
 
-    snap.docs.forEach((d) => chunks.push({ id: d.id, ...d.data() }));
+snap.docs.forEach((d) => {
+  const q = { id: d.id, ...d.data() };
+  q.difficulty = normalizeDifficulty(
+    q.difficulty ?? q.difficultyLevel ?? q.level ?? q.Difficulty
+  );
+  chunks.push(q);
+});
   }
 
   const map = new Map(chunks.map((q) => [q.id, q]));
@@ -1484,14 +1552,7 @@ const standardValues = Array.from(
       .filter((v) => v)
   )
 ).sort((a, b) => a.localeCompare(b));
-    const diffValues = Array.from(
-      new Set(
-        allQuestions
-          .map((q) => (q.difficulty || "").trim())
-          .filter((v) => v)
-      )
-    ).sort((a, b) => a.localeCompare(b));
-
+    const diffValues = ["easy", "standard", "hard"];
     body.innerHTML = "";
     const wrapper = createEl("div", "space-y-3", []);
 
@@ -1554,12 +1615,12 @@ standardSelect.appendChild(standardAllOpt);
     diffAllOpt.value = "";
     diffAllOpt.textContent = "All levels";
     diffSelect.appendChild(diffAllOpt);
-    diffValues.forEach((d) => {
-      const opt = document.createElement("option");
-      opt.value = d;
-      opt.textContent = d;
-      diffSelect.appendChild(opt);
-    });
+   diffValues.forEach((d) => {
+  const opt = document.createElement("option");
+  opt.value = d;
+  opt.textContent = formatDifficultyLabel(d);
+  diffSelect.appendChild(opt);
+});
 
     filterRow.appendChild(unitLabelEl);
 filterRow.appendChild(unitSelect);
@@ -1692,22 +1753,43 @@ updateBulkBar();
   );
 }
       if (diffVal) {
-        filtered = filtered.filter(
-          (q) => (q.difficulty || "").trim() === diffVal
-        );
-      }
+  filtered = filtered.filter((q) => normalizeDifficulty(q.difficulty) === diffVal);
+}
 
-      // Sort questions by unit, then text (same idea as before)
-      filtered.sort((a, b) => {
-        const ua = typeof a.unit === "number" ? a.unit : 0;
-        const ub = typeof b.unit === "number" ? b.unit : 0;
-        if (ua !== ub) return ua - ub;
-        const qa = (a.question || "").toLowerCase();
-        const qb = (b.question || "").toLowerCase();
-        if (qa < qb) return -1;
-        if (qa > qb) return 1;
-        return 0;
-      });
+      // Sort questions by unit, then topic, then skill, then difficulty, then text
+const diffRank = (d) => {
+  const nd = normalizeDifficulty(d);
+  if (nd === "easy") return 0;
+  if (nd === "standard") return 1;
+  if (nd === "hard") return 2;
+  return 1;
+};
+
+filtered.sort((a, b) => {
+  const ua = typeof a.unit === "number" ? a.unit : 0;
+  const ub = typeof b.unit === "number" ? b.unit : 0;
+  if (ua !== ub) return ua - ub;
+
+  const ta = (a.standardCode || "").toLowerCase();
+  const tb = (b.standardCode || "").toLowerCase();
+  if (ta < tb) return -1;
+  if (ta > tb) return 1;
+
+  const sa = (a.skill || "").toLowerCase();
+  const sb = (b.skill || "").toLowerCase();
+  if (sa < sb) return -1;
+  if (sa > sb) return 1;
+
+  const da = diffRank(a.difficulty);
+  const db = diffRank(b.difficulty);
+  if (da !== db) return da - db;
+
+  const qa = (a.question || "").toLowerCase();
+  const qb = (b.question || "").toLowerCase();
+  if (qa < qb) return -1;
+  if (qa > qb) return 1;
+  return 0;
+});
 
 lastFilteredIds = filtered.map((q) => q.id);
 
@@ -1738,7 +1820,7 @@ if (!filtered.length) {
   q.unit != null ? "Unit " + q.unit : "Unit ?";
 const stdLabel = q.standardCode ? " · " + q.standardCode : "";
 const skillLabel = q.skill ? " · " + q.skill : "";
-const diffLabel = q.difficulty ? " · " + q.difficulty : "";
+const diffLabel = q.difficulty ? " · " + formatDifficultyLabel(q.difficulty) : "";
         const titleText =
           q.question && q.question.length > 160
             ? q.question.slice(0, 157) + "…"
@@ -4671,11 +4753,7 @@ lines.forEach((line, idx) => {
   const options = [A, B, C, D].map((v) => v || "");
 
   // Normalize difficulty
-  let difficulty = (difficultyRaw || "").toLowerCase();
-  if (difficulty.startsWith("stand")) difficulty = "standard";
-  else if (difficulty.startsWith("chall")) difficulty = "challenging";
-  else if (difficulty.startsWith("extreme")) difficulty = "extreme";
-  else difficulty = "standard";
+const difficulty = normalizeDifficulty(difficultyRaw);
 
   // Correct answer: can be A/B/C/D or 1/2/3/4
   const cRaw = (correctRaw || "").toString().trim().toUpperCase();
@@ -5140,9 +5218,8 @@ function renderPickerList() {
 
   const unitVal = unitSelect.value;
   const skillVal = skillSelect.value;
-  const standardVal = standardSelect.value;
-  const diffVal = diffSelect.value;
-
+    const standardVal = standardSelect.value;
+  const diffVal = diffSelect ? diffSelect.value : "";
   if (unitVal) {
     filtered = filtered.filter((q) => String(q.unit || "") === unitVal);
   }
@@ -5155,32 +5232,43 @@ function renderPickerList() {
     filtered = filtered.filter((q) => (q.skill || "").trim() === skillVal);
   }
   if (diffVal) {
-    filtered = filtered.filter(
-      (q) => (q.difficulty || "").trim() === diffVal
-    );
-  }
+  filtered = filtered.filter((q) => normalizeDifficulty(q.difficulty) === diffVal);
+}
 
-  filtered.sort((a, b) => {
-    const ua = typeof a.unit === "number" ? a.unit : 0;
-    const ub = typeof b.unit === "number" ? b.unit : 0;
-    if (ua !== ub) return ua - ub;
+  // Sort questions by unit, then topic, then skill, then difficulty, then text
+const diffRank = (d) => {
+  const nd = normalizeDifficulty(d);
+  if (nd === "easy") return 0;
+if (nd === "standard") return 1;
+if (nd === "hard") return 2;
+  return 0;
+};
 
-    const ta = (a.standardCode || "").toLowerCase();
-    const tb = (b.standardCode || "").toLowerCase();
-    if (ta < tb) return -1;
-    if (ta > tb) return 1;
+filtered.sort((a, b) => {
+  const ua = typeof a.unit === "number" ? a.unit : 0;
+  const ub = typeof b.unit === "number" ? b.unit : 0;
+  if (ua !== ub) return ua - ub;
 
-    const sa = (a.skill || "").toLowerCase();
-    const sb = (b.skill || "").toLowerCase();
-    if (sa < sb) return -1;
-    if (sa > sb) return 1;
+  const ta = (a.standardCode || "").toLowerCase();
+  const tb = (b.standardCode || "").toLowerCase();
+  if (ta < tb) return -1;
+  if (ta > tb) return 1;
 
-    const qa = (a.question || "").toLowerCase();
-    const qb = (b.question || "").toLowerCase();
-    if (qa < qb) return -1;
-    if (qa > qb) return 1;
-    return 0;
-  });
+  const sa = (a.skill || "").toLowerCase();
+  const sb = (b.skill || "").toLowerCase();
+  if (sa < sb) return -1;
+  if (sa > sb) return 1;
+
+  const da = diffRank(a.difficulty);
+  const db = diffRank(b.difficulty);
+  if (da !== db) return da - db;
+
+  const qa = (a.question || "").toLowerCase();
+  const qb = (b.question || "").toLowerCase();
+  if (qa < qb) return -1;
+  if (qa > qb) return 1;
+  return 0;
+});
 
   list.innerHTML = "";
 
@@ -5231,8 +5319,8 @@ function renderPickerList() {
           `Unit ${q.unit || "?"}${
             q.standardCode ? " · " + q.standardCode : ""
           }${q.skill ? " · " + q.skill : ""}${
-            q.difficulty ? " · " + q.difficulty : ""
-          }`,
+q.difficulty ? " · " + formatDifficultyLabel(q.difficulty) : ""
+            }`,
         ]),
       ]);
 
@@ -5302,13 +5390,7 @@ const standardValues = Array.from(
       .filter((v) => v)
   )
 ).sort((a, b) => a.localeCompare(b));
-      const diffValues = Array.from(
-        new Set(
-          allQuestions
-            .map((q) => (q.difficulty || "").trim())
-            .filter((v) => v)
-        )
-      ).sort((a, b) => a.localeCompare(b));
+      const diffValues = ["easy", "standard", "hard"];
 
       // Unit select
       const unitLabelEl = createEl("span", "text-gray-600", ["Unit"]);
@@ -5363,11 +5445,11 @@ standardSelect.appendChild(standardAllOpt);
       diffAllOpt.textContent = "All levels";
       diffSelect.appendChild(diffAllOpt);
       diffValues.forEach((d) => {
-        const opt = document.createElement("option");
-        opt.value = d;
-        opt.textContent = d;
-        diffSelect.appendChild(opt);
-      });
+  const opt = document.createElement("option");
+  opt.value = d;
+  opt.textContent = formatDifficultyLabel(d);
+  diffSelect.appendChild(opt);
+});
 
       filterRow.appendChild(unitLabelEl);
 filterRow.appendChild(unitSelect);
