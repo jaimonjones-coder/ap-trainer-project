@@ -719,7 +719,10 @@ await doc.ref.update({ studentIds, students });
          students: nextStudents,
        });
      },
-
+// Teacher action: remove a student from a class (alias of leaveClass)
+async removeStudentFromClass(classId, studentId) {
+  return this.leaveClass(classId, studentId);
+},
      async deleteClass(classId) {
        if (!classId) return;
        const ref = db.collection("classes").doc(classId);
@@ -4700,17 +4703,59 @@ const countInput = createEl(
     const name =
       s.name || s.displayName || s.email || s.id.slice(0, 6);
 
-    li.appendChild(
-      createEl("span", "text-gray-900", [name])
-    );
+    const left = createEl("div", "flex flex-col", []);
+left.appendChild(createEl("span", "text-gray-900", [name]));
+if (s.email) {
+  left.appendChild(createEl("span", "text-xs text-gray-500", [s.email]));
+}
 
-    if (s.email) {
-      li.appendChild(
-        createEl("span", "text-xs text-gray-500", [s.email])
-      );
+const removeBtn = createEl(
+  "button",
+  "px-2 py-1 rounded-lg border border-red-300 text-xs text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-500",
+  ["Remove"]
+);
+
+removeBtn.type = "button";
+removeBtn.addEventListener("click", async () => {
+  const ok = window.confirm(`Remove ${name} from this class?`);
+  if (!ok) return;
+
+  removeBtn.disabled = true;
+  try {
+    // Either call the alias (if you added Edit 1)...
+    if (typeof DataManager.removeStudentFromClass === "function") {
+      await DataManager.removeStudentFromClass(classObj.id, s.id);
+    } else {
+      // ...or call leaveClass directly (works with your current code)
+      await DataManager.leaveClass(classObj.id, s.id);
     }
 
-    list.appendChild(li);
+    // Update the local UI object so the roster refresh is instant
+    classObj.students = (classObj.students || []).filter((st) => st && st.id !== s.id);
+    classObj.studentIds = (classObj.studentIds || []).filter((id) => id !== s.id);
+
+    Toast.show("Student removed.", "success");
+
+    // Re-render roster card immediately
+    renderClassRoster(cardEl, classObj);
+
+    // Optional: refresh the whole teacher classes view (updates counts)
+    if (typeof renderTeacherClasses === "function") {
+      renderTeacherClasses();
+    }
+  } catch (err) {
+    console.error("Remove student error", err);
+    Toast.show("Could not remove student.", "error");
+  } finally {
+    removeBtn.disabled = false;
+  }
+});
+
+li.innerHTML = "";
+li.appendChild(left);
+li.appendChild(removeBtn);
+
+list.appendChild(li);
   });
 
   cardEl.appendChild(list);
