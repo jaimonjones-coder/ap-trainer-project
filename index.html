@@ -820,23 +820,32 @@ async listAssignmentsForTeacher(teacherId) {
             .get();
           return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         },
-        async getQuestions(filter = {}) {
-          let ref = db.collection("questions");
-          if (filter.unit != null) {
-            ref = ref.where("unit", "==", filter.unit);
-          }
-          const snap = await ref.get();
-const qs = snap.docs.map((d) => {
-  const q = { id: d.id, ...d.data() };
-  q.difficulty = normalizeDifficulty(
-    q.difficulty ?? q.difficultyLevel ?? q.level ?? q.Difficulty
-  );
-  return q;
-});
-          if (!qs.length) return QuestionService.seedQuestions(filter.unit);
-          return qs;
-        },
+async getQuestions(filter = {}) {
+  let ref = db.collection("questions");
 
+  if (filter.unit != null) {
+    ref = ref.where("unit", "==", filter.unit);
+  }
+
+  if (filter.skill != null && String(filter.skill).trim() !== "") {
+    ref = ref.where("skill", "==", String(filter.skill).trim());
+  }
+
+  const snap = await ref.get();
+
+  const qs = snap.docs.map((d) => {
+    const q = { id: d.id, ...d.data() };
+    q.difficulty = normalizeDifficulty(
+      q.difficulty ?? q.difficultyLevel ?? q.level ?? q.Difficulty
+    );
+    return q;
+  });
+
+  // IMPORTANT: pass the whole filter so seedQuestions can filter by skill too
+  if (!qs.length) return QuestionService.seedQuestions(filter);
+
+  return qs;
+},
         async updateQuestion(id, updates) {
           if (!id || !updates) return;
           const ref = db.collection("questions").doc(id);
@@ -950,44 +959,49 @@ snap.docs.forEach((d) => {
   return ids.map((id) => map.get(id)).filter(Boolean);
 },
         
+seedQuestions(filterOrUnit) {
+  const unitFilter =
+    filterOrUnit && typeof filterOrUnit === "object"
+      ? filterOrUnit.unit
+      : filterOrUnit;
 
+  const skillFilter =
+    filterOrUnit && typeof filterOrUnit === "object"
+      ? String(filterOrUnit.skill || "").trim()
+      : "";
 
-        seedQuestions(unitFilter) {
-          const seed = [
-            {
-              id: "seed-1",
-              unit: 1,
-              skill: "Research Methods",
-              difficulty: "standard",
-              question:
-                "A researcher wants to study the effect of sleep deprivation on test performance. The group that receives no sleep is called the:",
-              options: [
-                "Control group",
-                "Random sample",
-                "Experimental group",
-                "Placebo group",
-              ],
-              correctIndex: 2,
-              explanation:
-                "The experimental group receives the independent variable (sleep deprivation) so its performance can be compared to a control group.",
-            },
-            {
-              id: "seed-2",
-              unit: 2,
-              skill: "Biological Bases",
-              difficulty: "standard",
-              question:
-                "Which structure of the neuron receives messages from other neurons?",
-              options: ["Axon", "Myelin sheath", "Dendrites", "Synapse"],
-              correctIndex: 2,
-              explanation:
-                "Dendrites receive incoming signals from neighboring neurons.",
-            },
-          ];
-          return seed.filter((q) => !unitFilter || q.unit === unitFilter);
-        },
-      };
-    // --- Mastery helpers for analytics (student UI) ---
+  const seed = [
+    {
+      id: "seed-1",
+      unit: 1,
+      skill: "Research Methods",
+      difficulty: "standard",
+      question: "The group that receives no sleep is called the:",
+      options: ["Control group", "Random sample", "Experimental group", "Placebo group"],
+      correctIndex: 2,
+      explanation:
+        "The experimental group receives the independent variable (sleep deprivation) so its performance can be compared to a control group.",
+    },
+    {
+      id: "seed-2",
+      unit: 2,
+      skill: "Biological Bases",
+      difficulty: "standard",
+      question: "Which structure of the neuron receives messages from other neurons?",
+      options: ["Axon", "Myelin sheath", "Dendrites", "Synapse"],
+      correctIndex: 2,
+      explanation: "Dendrites receive incoming signals from neighboring neurons.",
+    },
+  ];
+     return seed.filter((q) => {
+    const unitOk = !unitFilter || q.unit === unitFilter;
+    const skillOk = !skillFilter || String(q.skill || "").trim() === skillFilter;
+    return unitOk && skillOk;
+  });
+}
+}; // ✅ CLOSE QuestionService
+
+// --- Mastery helpers for analytics (student UI) ---
 function getMasteryBand(accuracy) {
   if (accuracy == null || isNaN(accuracy)) return "none";
   if (accuracy >= 0.8) return "high";
@@ -2096,30 +2110,92 @@ renderQuestionLibraryList();
           const reps = card.repetitions || 0;
           return overdueDays * 2 + (3 - Math.min(ef, 3)) + (reps < 3 ? 1 : 0);
         },
+async getStats(userId) {
+  const map = await this.getSRMap(userId);
+  const ids = Object.keys(map);
+  const totalCards = ids.length;
+  const now = Date.now();
+  const soonThreshold = now + 2 * 24 * 60 * 60 * 1000;
+  let dueNow = 0;
+  let dueSoon = 0;
+  let mastered = 0;
 
-        async getStats(userId) {
-          const map = await this.getSRMap(userId);
-          const ids = Object.keys(map);
-          const totalCards = ids.length;
-          const now = Date.now();
-          const soonThreshold = now + 2 * 24 * 60 * 60 * 1000;
-          let dueNow = 0;
-          let dueSoon = 0;
-          let mastered = 0;
-          ids.forEach((id) => {
-            const card = map[id] || {};
-            const next = card.nextReview || now;
-            if (!card.nextReview || next <= now) dueNow++;
-            else if (next <= soonThreshold) dueSoon++;
-            if (
-              (card.repetitions || 0) >= 5 &&
-              (card.easeFactor || 2.5) >= 2.3
-            )
-              mastered++;
-          });
-          return { totalCards, dueNow, dueSoon, mastered };
-        },
-      };
+  ids.forEach((id) => {
+    const card = map[id] || {};
+    const next = card.nextReview || now;
+    if (!card.nextReview || next <= now) dueNow++;
+    else if (next <= soonThreshold) dueSoon++;
+
+    if ((card.repetitions || 0) >= 5 && (card.easeFactor || 2.5) >= 2.3) {
+      mastered++;
+    }
+  });
+
+  return { totalCards, dueNow, dueSoon, mastered };
+},
+
+// Delete specific SR cards (doc IDs are question IDs)
+async deleteCards(userId, ids) {
+  if (!userId || !ids || !ids.length) return 0;
+
+  // Firestore batch limit is 500; use 400 to be safe.
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += 400) {
+    const batch = db.batch();
+    ids.slice(i, i + 400).forEach((qid) => {
+      const ref = db.collection("users").doc(userId).collection("sr").doc(qid);
+      batch.delete(ref);
+    });
+    await batch.commit();
+    deleted += Math.min(400, ids.length - i);
+  }
+  return deleted;
+},
+
+// One-shot cleanup: remove SR docs that point to missing questions
+async pruneOrphanedCards(userId) {
+  if (!userId) return { total: 0, removed: 0, kept: 0 };
+
+  const col = db.collection("users").doc(userId).collection("sr");
+  const snap = await col.get();
+  const ids = snap.docs.map((d) => d.id);
+  if (!ids.length) return { total: 0, removed: 0, kept: 0 };
+
+  // Treat local seed questions as valid targets too (seed-1, seed-2, ...)
+  const keep = new Set();
+  try {
+    const seeds = QuestionService.seedQuestions(null) || [];
+    seeds.forEach((q) => {
+      if (q && q.id) keep.add(q.id);
+    });
+  } catch (_) {
+    // ignore
+  }
+
+  // For Firestore questions, docId "in" supports up to 10 values per query
+  const idsCopy = ids.slice();
+  while (idsCopy.length) {
+    const batchIds = idsCopy.splice(0, 10).filter(Boolean);
+    if (!batchIds.length) continue;
+
+    const qSnap = await db
+      .collection("questions")
+      .where(firebase.firestore.FieldPath.documentId(), "in", batchIds)
+      .get();
+
+    qSnap.docs.forEach((d) => keep.add(d.id));
+  }
+
+  const missing = ids.filter((id) => !keep.has(id));
+  if (!missing.length) {
+    return { total: ids.length, removed: 0, kept: ids.length };
+  }
+
+  const removed = await this.deleteCards(userId, missing);
+  return { total: ids.length, removed, kept: ids.length - removed };
+}
+};
+
 
       // ---------------- Next Best Action ----------------
       function computeNextBestAction({ overview, unitSummary, srDueCount }) {
@@ -2358,57 +2434,139 @@ function launchSRFromAnalytics() {
   renderTabs();
   renderCurrentTab();
 }
-async function startPractice({ mode, unit, limit }) {
+async function startPractice({ mode, unit, limit, skill }) {
   const userId = AppState.user.uid;
   let questions = [];
-
   try {
-    if (mode === "sr") {
-      // Spaced repetition due cards
-      const dueSR = await SpacedRepetition.getDueQuestions(userId, 20);
-      if (!dueSR.length) {
-        Toast.show("No SR cards due. Try smart practice instead.", "info");
-        return;
+if (mode === "sr") {
+  // Spaced repetition due cards
+  let dueSR = await SpacedRepetition.getDueQuestions(userId, 20);
+
+  if (!dueSR.length) {
+    Toast.show("No SR cards due. Try smart practice instead.", "info");
+    return;
+  }
+
+  // Attempt #1: load questions for due SR ids
+  let ids = dueSR.map((d) => d.id);
+  questions = await QuestionService.getByIds(ids);
+  questions = (questions || []).filter(Boolean);
+
+  // If some SR ids are missing question docs, prune those SR docs
+  if (questions.length) {
+    const found = new Set(questions.map((q) => q.id));
+    const missingInBatch = ids.filter((id) => !found.has(id));
+    if (missingInBatch.length) {
+      await SpacedRepetition.deleteCards(userId, missingInBatch);
+    }
+  }
+
+  // If none of the due SR ids could be loaded, do a one-shot cleanup + retry
+  if (!questions.length) {
+    const result = await SpacedRepetition.pruneOrphanedCards(userId);
+
+    if (result.removed > 0) {
+      Toast.show(
+        `Cleaned up ${result.removed} SR cards that referenced removed questions.`,
+        "info"
+      );
+    }
+
+    // Retry after cleanup
+    dueSR = await SpacedRepetition.getDueQuestions(userId, 20);
+    if (!dueSR.length) {
+      Toast.show("No SR cards due. Try smart practice instead.", "info");
+      return;
+    }
+
+    ids = dueSR.map((d) => d.id);
+    questions = await QuestionService.getByIds(ids);
+    questions = (questions || []).filter(Boolean);
+
+    // Prune any remaining missing ids from the retried batch
+    if (questions.length) {
+      const found2 = new Set(questions.map((q) => q.id));
+      const missing2 = ids.filter((id) => !found2.has(id));
+      if (missing2.length) {
+        await SpacedRepetition.deleteCards(userId, missing2);
       }
-      const ids = dueSR.map((d) => d.id);
-      questions = await QuestionService.getByIds(ids);
-    } else if (mode === "unit") {
+    }
+  }
+
+  // If still empty after retry, show a clearer SR-specific message
+  if (!questions.length) {
+    Toast.show(
+      "No SR questions available (your SR deck may reference removed questions).",
+      "info"
+    );
+    return;
+  }
+}
+else if (mode === "skill") {
+  const chosenSkill = String(skill || "").trim();
+  if (!chosenSkill) {
+    Toast.show("Pick a skill to practice.", "info");
+    return;
+  }
+
+  questions = await QuestionService.getQuestions({ skill: chosenSkill });
+
+  if (limit && questions.length > limit) {
+    questions = questions
+      .sort(() => Math.random() - 0.5)
+      .slice(0, limit);
+  }
+}
+
+else if (mode === "unit") {
       // Simple unit-based practice
       questions = await QuestionService.getQuestions({ unit });
       if (limit && questions.length > limit) {
         questions = questions.slice(0, limit);
       }
     } else if (mode === "smart") {
-      // Smart mixed practice: SR + weakest units
-      const dueSR = await SpacedRepetition.getDueQuestions(userId, 10);
-      const idsSR = dueSR.map((d) => d.id);
-      const srQuestions = idsSR.length
-        ? await QuestionService.getByIds(idsSR)
-        : [];
+     // Smart mixed practice: SR + weakest units
+const dueSR = await SpacedRepetition.getDueQuestions(userId, 10);
+const idsSR = dueSR.map((d) => d.id);
 
-      const submissions = await DataManager.listSubmissionsForStudent(userId);
-      const overview = AnalyticsService.computeStudentOverview(submissions);
-      const unitSummary = AnalyticsService.summarizeUnits(overview.unitStats);
+const srQuestions = idsSR.length
+  ? await QuestionService.getByIds(idsSR)
+  : [];
 
-      const weakUnits = unitSummary
-        .filter((u) => u.total >= 10)
-        .sort((a, b) => a.accuracy - b.accuracy)
-        .slice(0, 3)
-        .map((u) => u.unit);
+// ✅ Define srQs in outer scope so you can use it later
+const srQs = (srQuestions || []).filter(Boolean);
 
-      let weakQuestions = [];
-      for (const wu of weakUnits) {
-        const q = await QuestionService.getQuestions({ unit: wu });
-        weakQuestions = weakQuestions.concat(q);
-      }
+// Prune SR cards that reference missing questions (keeps stats honest over time)
+if (idsSR.length) {
+  const found = new Set(srQs.map((q) => q.id));
+  const missing = idsSR.filter((id) => !found.has(id));
+  if (missing.length) {
+    await SpacedRepetition.deleteCards(userId, missing);
+  }
+}
 
-      // Fallback: if nothing special, just any questions
-      if (!srQuestions.length && !weakQuestions.length) {
-        weakQuestions = await QuestionService.getQuestions();
-      }
+const submissions = await DataManager.listSubmissionsForStudent(userId);
+const overview = AnalyticsService.computeStudentOverview(submissions);
+const unitSummary = AnalyticsService.summarizeUnits(overview.unitStats);
 
-      let combined = [...srQuestions, ...weakQuestions];
+const weakUnits = unitSummary
+  .filter((u) => u.total >= 10)
+  .sort((a, b) => a.accuracy - b.accuracy)
+  .slice(0, 3)
+  .map((u) => u.unit);
 
+let weakQuestions = [];
+for (const wu of weakUnits) {
+  const q = await QuestionService.getQuestions({ unit: wu });
+  weakQuestions = weakQuestions.concat(q);
+}
+
+// Fallback: if nothing special, just any questions
+if (!srQs.length && !weakQuestions.length) {
+  weakQuestions = await QuestionService.getQuestions();
+}
+
+let combined = [...srQs, ...weakQuestions];
       // De-duplicate by id
       const map = new Map();
       combined.forEach((q) => {
@@ -3975,7 +4133,104 @@ const countInput = createEl(
           card.appendChild(btn);
           grid.appendChild(card);
         })();
+// Skill focus practice
+(function () {
+  const card = createEl(
+    "div",
+    "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+    []
+  );
 
+  card.appendChild(
+    createEl("p", "text-xs font-semibold text-gray-900", ["Skill focus"])
+  );
+
+  card.appendChild(
+    createEl("p", "text-sm text-gray-600", [
+      "Practice questions from a single skill (great for targeting weak areas).",
+    ])
+  );
+
+  const row = createEl("div", "flex items-center gap-2 text-xs", []);
+
+  const skillSelect = createEl(
+    "select",
+    "flex-1 max-w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs truncate focus:outline-none focus:ring-1 focus:ring-blue-500",
+    []
+  );
+
+  // initial loading state
+  const loadingOpt = document.createElement("option");
+  loadingOpt.value = "";
+  loadingOpt.textContent = "Loading skills…";
+  skillSelect.appendChild(loadingOpt);
+  skillSelect.disabled = true;
+
+  const countInput = createEl(
+    "input",
+    "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
+    []
+  );
+  countInput.type = "number";
+  countInput.min = "5";
+  countInput.max = "50";
+  countInput.value = "10";
+
+  row.appendChild(skillSelect);
+  row.appendChild(countInput);
+  card.appendChild(row);
+
+  const btn = createEl(
+    "button",
+    "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+    ["Start skill practice"]
+  );
+
+  btn.addEventListener("click", () => {
+    const skill = String(skillSelect.value || "").trim();
+    const limit = Number(countInput.value || 10);
+    startPractice({ mode: "skill", skill, limit });
+  });
+
+  card.appendChild(btn);
+  grid.appendChild(card);
+
+  // Populate skills asynchronously (from question bank)
+  (async () => {
+    try {
+      const all = await QuestionService.getQuestions();
+      const skills = Array.from(
+        new Set((all || []).map((q) => String(q.skill || "").trim()).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b));
+
+      skillSelect.innerHTML = "";
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = skills.length ? "Select a skill" : "No skills found";
+      skillSelect.appendChild(placeholder);
+
+      skills.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        skillSelect.appendChild(opt);
+      });
+
+      skillSelect.disabled = skills.length === 0;
+      btn.disabled = skills.length === 0;
+    } catch (e) {
+      console.error("Skill list load error", e);
+      skillSelect.innerHTML = "";
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Unable to load skills";
+      skillSelect.appendChild(opt);
+      skillSelect.disabled = true;
+      btn.disabled = true;
+    }
+  })();
+})();
         // Smart mixed practice
         (function () {
           const card = createEl(
