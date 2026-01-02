@@ -258,6 +258,15 @@ body.app-mode #right-column {
                 ></span>
                 <span>Student</span>
               </span>
+              <!-- Sync status pill -->
+<span
+  id="sync-pill"
+  class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs text-gray-700 shadow-sm"
+  title="Live"
+>
+  <span data-dot class="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span>
+  <span data-label>Live</span>
+</span>
               <button
                 id="logout-btn"
                 type="button"
@@ -600,7 +609,422 @@ function formatShortDateTime(input) {
         currentTab: null,
         currentQuiz: null,
       };
+// ---------------- Real-time + Offline UX (Rubric 3.3 + 7.2) ----------------
+const SyncUI = (() => {
+  const DOT = {
+    live: "bg-green-500",
+    syncing: "bg-yellow-500",
+    cached: "bg-amber-500",
+    offline: "bg-red-500",
+    signedOut: "bg-gray-400",
+  };
 
+  function set(mode, labelOverride) {
+    const pill = $("sync-pill");
+    if (!pill) return;
+
+    const dot = pill.querySelector("[data-dot]");
+    const label = pill.querySelector("[data-label]");
+
+    const labelText =
+      labelOverride ||
+      (mode === "live"
+        ? "Live"
+        : mode === "syncing"
+        ? "Syncing"
+        : mode === "cached"
+        ? "Cached"
+        : mode === "offline"
+        ? "Offline"
+        : "Signed out");
+
+    if (dot) {
+      Object.values(DOT).forEach((c) => dot.classList.remove(c));
+      dot.classList.add(DOT[mode] || DOT.signedOut);
+    }
+    if (label) label.textContent = labelText;
+    pill.title = labelText;
+  }
+
+  return { set };
+})();
+
+const LiveData = {
+  active: false,
+  uid: null,
+  role: null,
+
+  // public live arrays
+  classes: [],
+  assignments: [],
+  submissions: [],
+
+  // tells render funcs whether "0 items" is real or just "not loaded yet"
+  ready: { classes: false, assignments: false, submissions: false },
+
+  // internals
+  _classUnsub: null,
+  _assignmentUnsubs: [],
+  _submissionUnsubs: [],
+  _assignmentChunks: {}, // key -> array of docs
+  _submissionChunks: {}, // key -> array of docs
+  _lastClassIdsKey: "",
+  _lastAssignmentIdsKey: "",
+  _meta: { classes: null, assignments: null, submissions: null },
+  _notifyTimer: null,
+  _boundOnline: false,
+
+  start(uid, role) {
+    this.stop();
+    this.active = true;
+    this.uid = uid;
+    this.role = role;
+    this.ready = { classes: false, assignments: false, submissions: false };
+    this._meta = { classes: null, assignments: null, submissions: null };
+
+    // show something immediately
+    SyncUI.set(navigator.onLine ? "syncing" : "offline");
+
+    // online/offline events (attach once)
+    if (!this._boundOnline) {
+      this._boundOnline = true;
+
+      window.addEventListener("offline", () => {
+        SyncUI.set("offline");
+        Toast.show("Offline — showing cached data when available.", "info");
+      });
+
+      window.addEventListener("online", () => {
+        // Firestore will auto-resync; we just reflect UI + rerender
+        Toast.show("Back online — syncing…", "success");
+        this._refreshPill();
+        this._scheduleRender();
+      });
+    }
+
+    this._subscribeClasses();
+
+    if (role === "teacher") {
+      this._subscribeAssignmentsTeacher();
+      // teacher submissions are subscribed after assignments arrive
+    } else {
+      // student submissions can be subscribed immediately
+      this._subscribeSubmissionsStudent();
+      // student assignments are subscribed after classes arrive
+    }
+  },
+
+  stop() {
+    try {
+      if (this._classUnsub) this._classUnsub();
+    } catch (e) {}
+    this._classUnsub = null;
+
+    this._assignmentUnsubs.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {}
+    });
+    this._assignmentUnsubs = [];
+    this._assignmentChunks = {};
+    this._lastClassIdsKey = "";
+
+    this._submissionUnsubs.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {}
+    });
+    this._submissionUnsubs = [];
+    this._submissionChunks = {};
+    this._lastAssignmentIdsKey = "";
+
+    this.active = false;
+    this.uid = null;
+    this.role = null;
+
+    this.classes = [];
+    this.assignments = [];
+    this.submissions = [];
+    this.ready = { classes: false, assignments: false, submissions: false };
+    this._meta = { classes: null, assignments: null, submissions: null };
+
+    SyncUI.set("signedOut");
+  },
+
+  _scheduleRender() {
+    if (this._notifyTimer) return;
+    this._notifyTimer = setTimeout(() => {
+      this._notifyTimer = null;
+      // rerender current tab to reflect live updates
+      try {
+        if (AppState.user && !$("app-view")?.classList.contains("hidden")) {
+          renderCurrentTab();
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 120);
+  },
+
+  _updateMeta(key, meta) {
+    this._meta[key] = {
+      fromCache: !!meta.fromCache,
+      pending: !!meta.hasPendingWrites,
+    };
+    this._refreshPill();
+  },
+
+  _refreshPill() {
+    if (!this.active) {
+      SyncUI.set("signedOut");
+      return;
+    }
+    if (!navigator.onLine) {
+      SyncUI.set("offline");
+      return;
+    }
+    const metas = Object.values(this._meta).filter(Boolean);
+    const anyPending = metas.some((m) => m.pending);
+    const anyFromCache = metas.some((m) => m.fromCache);
+
+    if (anyPending) SyncUI.set("syncing");
+    else if (anyFromCache) SyncUI.set("cached");
+    else SyncUI.set("live");
+  },
+
+  _chunk(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  },
+
+  _toMillis(x) {
+    if (!x) return 0;
+    if (typeof x.toMillis === "function") return x.toMillis();
+    if (typeof x.toDate === "function") return x.toDate().getTime();
+    const d = x instanceof Date ? x : new Date(x);
+    const t = d.getTime();
+    return isNaN(t) ? 0 : t;
+  },
+
+  _dedupeById(arr) {
+    const m = new Map();
+    (arr || []).forEach((o) => {
+      if (o && o.id) m.set(o.id, o);
+    });
+    return Array.from(m.values());
+  },
+
+  _subscribeClasses() {
+    const uid = this.uid;
+    let q = db.collection("classes");
+
+    if (this.role === "teacher") {
+      q = q.where("teacherId", "==", uid);
+    } else {
+      q = q.where("studentIds", "array-contains", uid);
+    }
+
+    this._classUnsub = q.onSnapshot(
+      { includeMetadataChanges: true },
+      (snap) => {
+        this.ready.classes = true;
+        this._updateMeta("classes", snap.metadata);
+
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        // sort newest first when possible
+        list.sort((a, b) => this._toMillis(b.createdAt) - this._toMillis(a.createdAt));
+        this.classes = list;
+
+        // student assignments depend on class ids
+        if (this.role === "student") {
+          const classIds = list.map((c) => c.id).filter(Boolean);
+          this._subscribeAssignmentsStudent(classIds);
+        }
+
+        this._scheduleRender();
+      },
+      (err) => {
+        console.error("LiveData classes listener error", err);
+      }
+    );
+  },
+
+  _subscribeAssignmentsTeacher() {
+    const uid = this.uid;
+    const q = db.collection("assignments").where("teacherId", "==", uid);
+
+    // one listener for all teacher assignments
+    const unsub = q.onSnapshot(
+      { includeMetadataChanges: true },
+      (snap) => {
+        this.ready.assignments = true;
+        this._updateMeta("assignments", snap.metadata);
+
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        // sort by due date ascending, then created desc
+        list.sort((a, b) => {
+          const ad = this._toMillis(a.dueAt) || Number.POSITIVE_INFINITY;
+          const bd = this._toMillis(b.dueAt) || Number.POSITIVE_INFINITY;
+          if (ad !== bd) return ad - bd;
+          return this._toMillis(b.createdAt) - this._toMillis(a.createdAt);
+        });
+        this.assignments = list;
+
+        // teacher submissions depend on assignment ids
+        const assignmentIds = list.map((a) => a.id).filter(Boolean);
+        this._subscribeSubmissionsTeacher(assignmentIds);
+
+        this._scheduleRender();
+      },
+      (err) => console.error("LiveData teacher assignments listener error", err)
+    );
+
+    this._assignmentUnsubs.push(unsub);
+  },
+
+  _subscribeAssignmentsStudent(classIds) {
+    const ids = (classIds || []).filter(Boolean);
+    const key = ids.slice().sort().join("|");
+
+    if (key === this._lastClassIdsKey) return;
+    this._lastClassIdsKey = key;
+
+    // reset any prior assignment listeners
+    this._assignmentUnsubs.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {}
+    });
+    this._assignmentUnsubs = [];
+    this._assignmentChunks = {};
+    this.assignments = [];
+    this.ready.assignments = true; // even if empty: "loaded"
+
+    if (!ids.length) {
+      this._scheduleRender();
+      return;
+    }
+
+    const batches = this._chunk(ids, 10);
+    batches.forEach((batchIds, idx) => {
+      const chunkKey = `classIn_${idx}_${batchIds.join("_")}`;
+      const q = db.collection("assignments").where("classId", "in", batchIds);
+
+      const unsub = q.onSnapshot(
+        { includeMetadataChanges: true },
+        (snap) => {
+          this._updateMeta("assignments", snap.metadata);
+
+          this._assignmentChunks[chunkKey] = snap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          }));
+
+          const merged = this._dedupeById(
+            Object.values(this._assignmentChunks).flat()
+          );
+
+          // sort by due date ascending, then created desc
+          merged.sort((a, b) => {
+            const ad = this._toMillis(a.dueAt) || Number.POSITIVE_INFINITY;
+            const bd = this._toMillis(b.dueAt) || Number.POSITIVE_INFINITY;
+            if (ad !== bd) return ad - bd;
+            return this._toMillis(b.createdAt) - this._toMillis(a.createdAt);
+          });
+
+          this.assignments = merged;
+          this._scheduleRender();
+        },
+        (err) => console.error("LiveData student assignments listener error", err)
+      );
+
+      this._assignmentUnsubs.push(unsub);
+    });
+  },
+
+  _subscribeSubmissionsStudent() {
+    const uid = this.uid;
+    const q = db.collection("submissions").where("userId", "==", uid);
+
+    const unsub = q.onSnapshot(
+      { includeMetadataChanges: true },
+      (snap) => {
+        this.ready.submissions = true;
+        this._updateMeta("submissions", snap.metadata);
+
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort(
+          (a, b) => this._toMillis(b.completedAt) - this._toMillis(a.completedAt)
+        );
+        this.submissions = list;
+
+        this._scheduleRender();
+      },
+      (err) => console.error("LiveData student submissions listener error", err)
+    );
+
+    this._submissionUnsubs.push(unsub);
+  },
+
+  _subscribeSubmissionsTeacher(assignmentIds) {
+    const ids = (assignmentIds || []).filter(Boolean);
+
+    // (Safety cap) Avoid creating a huge number of listeners on very large datasets.
+    const capped = ids.slice(0, 100);
+    const key = capped.slice().sort().join("|");
+    if (key === this._lastAssignmentIdsKey) return;
+    this._lastAssignmentIdsKey = key;
+
+    // reset prior
+    this._submissionUnsubs.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {}
+    });
+    this._submissionUnsubs = [];
+    this._submissionChunks = {};
+    this.submissions = [];
+    this.ready.submissions = true; // even if empty
+
+    if (!capped.length) {
+      this._scheduleRender();
+      return;
+    }
+
+    const batches = this._chunk(capped, 10);
+    batches.forEach((batchIds, idx) => {
+      const chunkKey = `assignIn_${idx}_${batchIds.join("_")}`;
+      const q = db.collection("submissions").where("assignmentId", "in", batchIds);
+
+      const unsub = q.onSnapshot(
+        { includeMetadataChanges: true },
+        (snap) => {
+          this._updateMeta("submissions", snap.metadata);
+
+          this._submissionChunks[chunkKey] = snap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          }));
+
+          const merged = this._dedupeById(
+            Object.values(this._submissionChunks).flat()
+          );
+
+          merged.sort(
+            (a, b) => this._toMillis(b.completedAt) - this._toMillis(a.completedAt)
+          );
+          this.submissions = merged;
+
+          this._scheduleRender();
+        },
+        (err) => console.error("LiveData teacher submissions listener error", err)
+      );
+
+      this._submissionUnsubs.push(unsub);
+    });
+  },
+};
       const TABS_BY_ROLE = {
         student: [
           { id: "dashboard", label: "Dashboard" },
@@ -3296,7 +3720,10 @@ async function renderStudentClasses() {
 
   let classes = [];
   try {
-    classes = await DataManager.listClassesForStudent(AppState.user.uid);
+classes =
+  LiveData.active && LiveData.ready.classes
+    ? LiveData.classes
+    : await DataManager.listClassesForStudent(AppState.user.uid);
   } catch (e) {
     console.error("List classes error", e);
     Toast.show(
@@ -3468,11 +3895,17 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
         let submissions = [];
         try {
           const [a, s] = await Promise.all([
-            DataManager.listAssignmentsForStudent(userId),
-            DataManager.listSubmissionsForStudent(userId),
-          ]);
-          assignments = a || [];
-          submissions = s || [];
+  (LiveData.active && LiveData.ready.assignments)
+    ? Promise.resolve(LiveData.assignments)
+    : DataManager.listAssignmentsForStudent(userId),
+
+  (LiveData.active && LiveData.ready.submissions)
+    ? Promise.resolve(LiveData.submissions)
+    : DataManager.listSubmissionsForStudent(userId),
+]);
+
+assignments = a || [];
+submissions = s || [];
         } catch (e) {
           console.error("Student assignments error", e);
           Toast.show(
@@ -4729,16 +5162,16 @@ const countInput = createEl(
     "<p class='text-sm text-gray-500'>Loading classes…</p>";
   const teacherId = AppState.user.uid;
 
-  let classes = [];
-  try {
-    classes = await DataManager.listClassesForTeacher(teacherId);
-  } catch (e) {
-    console.error("Teacher classes error", e);
-    Toast.show(
-      "Unable to load your classes (check Firestore rules).",
-      "error"
-    );
-  }
+ let classes = [];
+try {
+  classes =
+    LiveData.active && LiveData.ready.classes
+      ? (LiveData.classes || [])
+      : await DataManager.listClassesForTeacher(teacherId);
+} catch (e) {
+  console.error("Teacher classes error", e);
+  Toast.show("Unable to load your classes (check Firestore rules).", "error");
+}
 
   const wrapper = createEl("div", "space-y-4", []);
   wrapper.appendChild(
@@ -5111,23 +5544,26 @@ return questions;
         content.innerHTML =
           "<p class='text-sm text-gray-500'>Loading assignments…</p>";
         const teacherId = AppState.user.uid;
+let classes = [];
+let assignments = [];
+try {
+  classes =
+    LiveData.active && LiveData.ready.classes
+      ? LiveData.classes
+      : await DataManager.listClassesForTeacher(teacherId);
 
-        let classes = [];
-        let assignments = [];
-        try {
-          const [cls, asg] = await Promise.all([
-            DataManager.listClassesForTeacher(teacherId),
-            DataManager.listAssignmentsForTeacher(teacherId),
-          ]);
-          classes = cls || [];
-          assignments = asg || [];
-        } catch (e) {
-          console.error("Teacher assignments error", e);
-          Toast.show(
-            "Assignments could not fully load (check Firestore rules).",
-            "error"
-          );
-        }
+  assignments =
+    LiveData.active && LiveData.ready.assignments
+      ? LiveData.assignments
+      : await DataManager.listAssignmentsForTeacher(teacherId);
+} catch (e) {
+  console.error("Teacher assignments error", e);
+  Toast.show(
+    "Assignments could not fully load (check Firestore rules).",
+    "error"
+  );
+}
+        
 
         const wrapper = createEl("div", "space-y-4", []);
         wrapper.appendChild(
@@ -6527,13 +6963,21 @@ async function renderTeacherResults() {
   let submissions = [];
 
   try {
-    const [cls, asg] = await Promise.all([
-      DataManager.listClassesForTeacher(teacherId),
-      DataManager.listAssignmentsForTeacher(teacherId),
-    ]);
-    classes = cls || [];
-    assignments = asg || [];
+  classes =
+    LiveData.active && LiveData.ready.classes
+      ? LiveData.classes
+      : await DataManager.listClassesForTeacher(teacherId);
 
+  assignments =
+    LiveData.active && LiveData.ready.assignments
+      ? LiveData.assignments
+      : await DataManager.listAssignmentsForTeacher(teacherId);
+
+  // ✅ Use live submissions if available (teacher mode)
+  if (LiveData.active && LiveData.role === "teacher" && LiveData.ready.submissions) {
+    submissions = (LiveData.submissions || []).filter((s) => !!s.assignmentId);
+  } else {
+    // fallback: old per-assignment fetch
     const arrays = [];
     for (const a of assignments) {
       try {
@@ -6544,13 +6988,14 @@ async function renderTeacherResults() {
       }
     }
     submissions = arrays.flat();
-  } catch (e) {
-    console.error("Teacher results error", e);
-    Toast.show(
-      "Analytics could not fully load (check Firestore rules).",
-      "error"
-    );
   }
+} catch (e) {
+  console.error("Teacher results error", e);
+  Toast.show(
+    "Analytics could not fully load (check Firestore rules).",
+    "error"
+  );
+}
 
   TeacherResultsState.classes = classes || [];
   TeacherResultsState.assignments = assignments || [];
@@ -6571,16 +7016,30 @@ async function renderTeacherResults() {
     ])
   );
 
-  if (!assignments.length || !submissions.length) {
-    wrapper.appendChild(
-      createEl("p", "text-sm text-gray-500", [
-        "Once students complete assignments, you’ll see analytics here.",
-      ])
-    );
-    content.innerHTML = "";
-    content.appendChild(wrapper);
-    return;
-  }
+  const waitingForLive =
+  LiveData.active &&
+  LiveData.role === "teacher" &&
+  (!LiveData.ready.assignments || !LiveData.ready.submissions);
+
+if (waitingForLive) {
+  wrapper.appendChild(
+    createEl("p", "text-sm text-gray-500", ["Loading live analytics…"])
+  );
+  content.innerHTML = "";
+  content.appendChild(wrapper);
+  return;
+}
+
+if (!assignments.length || !submissions.length) {
+  wrapper.appendChild(
+    createEl("p", "text-sm text-gray-500", [
+      "Once students complete assignments, you’ll see analytics here.",
+    ])
+  );
+  content.innerHTML = "";
+  content.appendChild(wrapper);
+  return;
+}
 
   const studentSet = new Set();
   const studentInfoMap = {};
@@ -6596,41 +7055,63 @@ async function renderTeacherResults() {
       }
     });
   });
+const now = Date.now();
 
-  const now = Date.now();
+const toMillis = (x) => {
+  if (!x) return null;
 
-  const activeAssignments = assignments.filter((a) => {
-    if (!a.dueAt) return true;
-    const ts = new Date(a.dueAt).getTime();
-    return isNaN(ts) ? true : ts >= now;
-  }).length;
+  // Firestore Timestamp
+  if (typeof x.toMillis === "function") return x.toMillis();
+  if (typeof x.toDate === "function") return x.toDate().getTime();
 
-  const scores = submissions
-    .map((s) =>
-      typeof s.scorePercent === "number" ? s.scorePercent : null
-    )
-    .filter((s) => s != null && !isNaN(s));
-  const avgScore =
-    scores.length > 0
-      ? Math.round(
-          scores.reduce((acc, v) => acc + v, 0) / scores.length
-        )
-      : null;
+  // number (already millis)
+  if (typeof x === "number") return x;
 
-  const topRow = createEl(
-    "div",
-    "grid grid-cols-1 md:grid-cols-4 gap-3",
-    [
-      statCard("Classes", classes.length),
-      statCard("Students", studentSet.size || 0),
-      statCard("Active assignments", activeAssignments),
-      statCard(
-        "Average score",
-        avgScore == null ? "—" : avgScore + "%"
-      ),
-    ]
-  );
-  wrapper.appendChild(topRow);
+  // string date
+  if (typeof x === "string") {
+    const t = Date.parse(x);
+    return isNaN(t) ? null : t;
+  }
+
+  // Date or fallback
+  const d = x instanceof Date ? x : new Date(x);
+  const t = d.getTime();
+  return isNaN(t) ? null : t;
+};
+
+const activeAssignments = assignments.filter((a) => {
+  if (!a.dueAt) return true;
+  const ts = toMillis(a.dueAt);
+  return ts == null ? true : ts >= now;
+}).length;
+
+// (Optional but recommended) ensure submissions match loaded assignments
+const assignmentIdSet = new Set(assignments.map((a) => a.id));
+submissions = submissions.filter(
+  (s) => s.assignmentId && assignmentIdSet.has(s.assignmentId)
+);
+
+const scores = submissions
+  .map((s) => (typeof s.scorePercent === "number" ? s.scorePercent : null))
+  .filter((s) => s != null && !isNaN(s));
+
+const avgScore =
+  scores.length > 0
+    ? Math.round(scores.reduce((acc, v) => acc + v, 0) / scores.length)
+    : null;
+
+const topRow = createEl(
+  "div",
+  "grid grid-cols-1 md:grid-cols-4 gap-3",
+  [
+    statCard("Classes", classes.length),
+    statCard("Students", studentSet.size || 0),
+    statCard("Active assignments", activeAssignments),
+    statCard("Average score", avgScore == null ? "—" : avgScore + "%"),
+  ]
+);
+wrapper.appendChild(topRow);
+ 
 
   // ---------- NEW: assignment status overview ----------
   const statusMap = buildAssignmentStatusMap(
@@ -6907,18 +7388,23 @@ assignmentsCard.appendChild(
   }
 
   wrapper.appendChild(studentCard);
-   // Unit difficulty map
-        const perUnitAgg = {};
-        submissions.forEach((s) => {
-          const perUnit = s.perUnit || {};
-          Object.entries(perUnit).forEach(([unit, data]) => {
-            const u = Number(unit);
-            if (!perUnitAgg[u]) perUnitAgg[u] = { answered: 0, correct: 0 };
-            perUnitAgg[u].answered += data.answered || 0;
-            perUnitAgg[u].correct += data.correct || 0;
-          });
-        });
+   // Unit difficulty map (robust)
+const perUnitAgg = {};
+submissions.forEach((s) => {
+  const perUnit = s?.perUnit || {};
+  Object.entries(perUnit).forEach(([unit, data]) => {
+    const u = Number(unit);
+    if (!Number.isFinite(u) || u < 1 || u > AP_UNITS.length) return;
 
+    if (!perUnitAgg[u]) perUnitAgg[u] = { answered: 0, correct: 0 };
+
+    const answered = Number(data?.answered) || 0;
+    const correct = Number(data?.correct) || 0;
+
+    perUnitAgg[u].answered += answered;
+    perUnitAgg[u].correct += correct;
+  });
+});
         const unitCard = createEl(
           "div",
           "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
@@ -6960,26 +7446,28 @@ assignmentsCard.appendChild(
         }
         wrapper.appendChild(unitCard);
 
-        // Most challenging questions
-        const questionMap = {};
-        submissions.forEach((s) => {
-          (s.questionResults || []).forEach((qr) => {
-            if (!qr || !qr.questionId) return;
-            const id = qr.questionId;
-            if (!questionMap[id]) {
-              questionMap[id] = {
-                questionId: qr.questionId,
-                text: qr.question,
-                unit: qr.unit || null,
-                attempts: 0,
-                correct: 0,
-              };
-            }
-            const entry = questionMap[id];
-            entry.attempts += 1;
-            if (qr.isCorrect) entry.correct += 1;
-          });
-        });
+       // Most challenging questions (robust)
+const questionMap = {};
+submissions.forEach((s) => {
+  (s?.questionResults || []).forEach((qr) => {
+    const id = qr?.questionId;
+    if (!id) return;
+
+    if (!questionMap[id]) {
+      questionMap[id] = {
+        questionId: id,
+        text: typeof qr?.question === "string" ? qr.question : "(Question text unavailable)",
+        unit: Number.isFinite(Number(qr?.unit)) ? Number(qr.unit) : null,
+        attempts: 0,
+        correct: 0,
+      };
+    }
+
+    const entry = questionMap[id];
+    entry.attempts += 1;
+    if (!!qr?.isCorrect) entry.correct += 1;
+  });
+});
 
         const hardest = Object.values(questionMap)
           .filter((q) => q.attempts >= 3)
@@ -7378,48 +7866,58 @@ function renderAssignmentStatusDetail(
           );
         }
       });
+$("logout-btn").addEventListener("click", async () => {
+  try {
+    LiveData.stop(); // ✅ stop immediately
+    await auth.signOut();
+  } catch (e) {
+    console.error(e);
+  }
+});
 
-      $("logout-btn").addEventListener("click", () => {
-        auth.signOut();
-      });
+// Auth state observer
+auth.onAuthStateChanged(async (user) => {
+  if (!user) {
+    LiveData.stop(); // ✅ stop listeners on sign-out
+    AppState.user = null;
+    AppState.currentQuiz = null;
+    showAppView(false);
+    return;
+  }
 
-      // Auth state observer
-      auth.onAuthStateChanged(async (user) => {
-        if (!user) {
-          AppState.user = null;
-          AppState.currentQuiz = null;
-          showAppView(false);
-          return;
-        }
-        AppState.user = user;
-        let profile = null;
-        try {
-          profile = await DataManager.getUserProfile(user.uid);
-          if (!profile) {
-            profile = {
-              email: user.email || "",
-              role: AppState.role || "student",
-            };
-            await DataManager.upsertUserProfile(user.uid, profile);
-          }
-        } catch (e) {
-          console.error("Error loading profile", e);
-        }
-        AppState.role =
-          profile && profile.role === "teacher" ? "teacher" : "student";
-        updateRolePill();
+  AppState.user = user;
 
-        const subtitle = $("user-subtitle");
-        if (subtitle) {
-          subtitle.textContent = `${
-            user.email || (profile?.isDemo ? "Demo account" : "No email")
-          } · ${AppState.role === "teacher" ? "Teacher" : "Student"} mode`;
-        }
+  let profile = null;
+  try {
+    profile = await DataManager.getUserProfile(user.uid);
+    if (!profile) {
+      profile = {
+        email: user.email || "",
+        role: AppState.role || "student",
+      };
+      await DataManager.upsertUserProfile(user.uid, profile);
+    }
+  } catch (e) {
+    console.error("Error loading profile", e);
+  }
 
-        showAppView(true);
-        renderTabs();
-        renderCurrentTab();
-      });
+  AppState.role = profile && profile.role === "teacher" ? "teacher" : "student";
+  updateRolePill();
+
+  LiveData.start(user.uid, AppState.role); // ✅ start listeners after role is known
+
+  const subtitle = $("user-subtitle");
+  if (subtitle) {
+    subtitle.textContent = `${
+      user.email || (profile?.isDemo ? "Demo account" : "No email")
+    } · ${AppState.role === "teacher" ? "Teacher" : "Student"} mode`;
+  }
+
+  showAppView(true);
+  renderTabs();
+  renderCurrentTab();
+});
+     
 
       // Initial state
       showAppView(false);
