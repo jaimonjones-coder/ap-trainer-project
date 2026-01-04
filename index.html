@@ -96,7 +96,7 @@ body.app-mode #right-column {
             Eduvate · AP Psychology Coach
           </div>
           <h1 class="text-2xl md:text-3xl font-semibold leading-tight">
-            AI-powered practice<br />
+            The Personal Trainer<br />
             for AP® Psychology
           </h1>
           <p class="text-xs md:text-sm text-gray-600 max-w-md leading-relaxed">
@@ -127,7 +127,7 @@ body.app-mode #right-column {
       </div>
 
       <!-- Right / App Container -->
-      <div id="right-column" class="bg-gray-50 p-4 md:p-6 flex flex-col">
+<div id="right-column" class="bg-gray-50 p-4 md:p-6 flex flex-col min-w-0">
         <!-- Auth View -->
         <div id="auth-view" class="flex-1 flex flex-col">
           <div class="mb-4">
@@ -287,10 +287,11 @@ body.app-mode #right-column {
 
 
           <!-- Content -->
-          <div
+         <div
   id="tab-content"
-  class="flex-1 bg-white border border-gray-200 rounded-2xl p-4 md:p-5 overflow-auto text-sm"
+  class="flex-1 min-w-0 max-w-full bg-white border border-gray-200 rounded-2xl p-4 md:p-5 overflow-y-auto overflow-x-hidden text-sm"
 ></div>
+
 
         </div> <!-- end right/app column -->
       </div>   <!-- end main grid -->
@@ -421,7 +422,42 @@ if (db && db.enablePersistence) {
         });
         return el;
       }
-function createElHTML(tag, className = "", html = "") {
+function buildQuestionHoverPreview(q, { align = "left" } = {}) {
+  const sideClass = align === "right" ? "right-2" : "left-2";
+  const questionText = q && q.question ? q.question : "(no text)";
+  const options = q && Array.isArray(q.options) ? q.options : [];
+
+  // NOTE: pointer-events-none is important in the picker because rows are <label>
+  // and clicking inside would toggle the checkbox.
+  const preview = createEl(
+    "div",
+    `hidden group-hover:block group-focus-within:block absolute ${sideClass} top-full mt-2 ` +
+      `w-[min(34rem,92vw)] bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50 pointer-events-none`,
+    []
+  );
+
+  preview.appendChild(
+    createEl(
+      "p",
+      "text-sm font-semibold text-gray-900 leading-relaxed whitespace-pre-wrap break-words",
+      [questionText]
+    )
+  );
+
+  if (options.length) {
+    const ul = createEl("ul", "mt-2 space-y-1 text-sm text-gray-800", []);
+    options.forEach((opt, i) => {
+      const letter = String.fromCharCode(65 + i);
+      ul.appendChild(
+        createEl("li", "whitespace-pre-wrap break-words", [`${letter}. ${opt}`])
+      );
+    });
+    preview.appendChild(ul);
+  }
+
+  return preview;
+}
+      function createElHTML(tag, className = "", html = "") {
   const el = document.createElement(tag);
   if (className) el.className = className;
   if (html != null) {
@@ -429,6 +465,121 @@ function createElHTML(tag, className = "", html = "") {
   }
   return el;
 }
+// ---------------- Hover preview (smart position + auto-flip) ----------------
+function removeAllQuestionPreviews() {
+  document.querySelectorAll(".q-hover-preview").forEach((el) => el.remove());
+}
+
+function buildQuestionPreviewEl(q) {
+  const wrap = createEl(
+    "div",
+    "q-hover-preview bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm text-gray-900",
+    []
+  );
+
+  // Floating (prevents modal clipping)
+  wrap.style.position = "fixed";
+  wrap.style.zIndex = "9999";
+  wrap.style.pointerEvents = "none";
+  wrap.style.display = "none";
+  wrap.style.width = "92vw";
+  wrap.style.maxWidth = "34rem";
+
+  // Content
+  wrap.appendChild(createEl("p", "font-medium mb-2", [q.question || "(no text)"]));
+
+  const opts = Array.isArray(q.options) ? q.options : [];
+  if (opts.length) {
+    const ul = createEl("ul", "space-y-1 text-gray-800", []);
+    opts.forEach((opt, i) => {
+      const letter = String.fromCharCode(65 + i);
+      ul.appendChild(
+        createEl("li", "", [`${letter}. ${opt == null ? "" : String(opt)}`])
+      );
+    });
+    wrap.appendChild(ul);
+  }
+
+  return wrap;
+}
+
+function positionQuestionPreview(previewEl, anchorEl) {
+  const margin = 8;
+
+  // Make it measurable
+  previewEl.style.display = "block";
+  previewEl.style.visibility = "hidden";
+  previewEl.style.top = "0px";
+  previewEl.style.left = "0px";
+
+  const a = anchorEl.getBoundingClientRect();
+  const p = previewEl.getBoundingClientRect();
+
+  const spaceBelow = window.innerHeight - a.bottom;
+  const spaceAbove = a.top;
+
+  // Auto-flip
+  const placeAbove = spaceBelow < p.height + margin && spaceAbove > spaceBelow;
+
+  let top = placeAbove ? a.top - p.height - margin : a.bottom + margin;
+  top = Math.max(margin, Math.min(top, window.innerHeight - margin - p.height));
+
+  let left = a.left;
+  left = Math.max(margin, Math.min(left, window.innerWidth - margin - p.width));
+
+  previewEl.style.top = `${top}px`;
+  previewEl.style.left = `${left}px`;
+  previewEl.style.visibility = "visible";
+}
+
+function attachSmartHoverPreview(anchorEl, q) {
+  let previewEl = null;
+  let onMove = null;
+
+  const show = () => {
+    if (previewEl) return;
+
+    // If a list re-rendered while hovering, prevent orphaned previews:
+    removeAllQuestionPreviews();
+
+    previewEl = buildQuestionPreviewEl(q);
+    document.body.appendChild(previewEl);
+    positionQuestionPreview(previewEl, anchorEl);
+    previewEl.style.display = "block";
+
+    onMove = () => {
+      if (!previewEl) return;
+      positionQuestionPreview(previewEl, anchorEl);
+    };
+
+    // capture=true catches scrolls inside overflow containers too
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+  };
+
+  const hide = () => {
+    if (onMove) {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+      onMove = null;
+    }
+    if (previewEl) {
+      previewEl.remove();
+      previewEl = null;
+    }
+  };
+
+  anchorEl.addEventListener("mouseenter", show);
+  anchorEl.addEventListener("mouseleave", hide);
+
+  // Keyboard users (tabbing into the checkbox/buttons)
+  anchorEl.addEventListener("focusin", show);
+  anchorEl.addEventListener("focusout", (e) => {
+    if (e && e.relatedTarget && anchorEl.contains(e.relatedTarget)) return;
+    hide();
+  });
+}
+
 // Difficulty normalizer (handles legacy field names + shorthand values)
 function normalizeDifficulty(raw) {
   const s = (raw ?? "").toString().trim().toLowerCase();
@@ -2234,6 +2385,7 @@ filtered.sort((a, b) => {
 
 lastFilteredIds = filtered.map((q) => q.id);
 
+removeAllQuestionPreviews();
 list.innerHTML = "";
 updateBulkBar();
       summary.textContent = `Showing ${
@@ -2252,10 +2404,10 @@ if (!filtered.length) {
      
       filtered.forEach((q) => {
         const row = createEl(
-          "div",
-          "px-3 py-2 flex flex-col gap-1 md:flex-row md:items-start md:justify-between",
-          []
-        );
+  "div",
+  "relative group px-3 py-2 flex flex-col gap-1 md:flex-row md:items-start md:justify-between",
+  []
+);
 
         const unitLabel =
   q.unit != null ? "Unit " + q.unit : "Unit ?";
@@ -2383,6 +2535,9 @@ checkbox.addEventListener("change", () => {
 const leftWrap = createEl("div", "flex items-start gap-2 flex-1", []);
 leftWrap.appendChild(checkbox);
 leftWrap.appendChild(left);
+
+// ✅ NEW: smart hover preview on the question text area
+attachSmartHoverPreview(leftWrap, q);
 
 row.appendChild(leftWrap);
 row.appendChild(btnRow);
@@ -6006,8 +6161,8 @@ filtered.sort((a, b) => {
   return 0;
 });
 
-  list.innerHTML = "";
-
+removeAllQuestionPreviews();
+list.innerHTML = "";
   if (!filtered.length) {
     list.appendChild(
       createEl("p", "text-sm text-gray-500", [
@@ -6017,10 +6172,10 @@ filtered.sort((a, b) => {
   } else {
     filtered.forEach((q) => {
       const row = createEl(
-        "label",
-        "flex items-start gap-2 border border-gray-200 rounded-lg px-2 py-1",
-        []
-      );
+  "label",
+  "relative group flex items-start gap-2 border border-gray-200 rounded-lg px-2 py-1",
+  []
+);
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
@@ -6061,7 +6216,11 @@ q.difficulty ? " · " + formatDifficultyLabel(q.difficulty) : ""
       ]);
 
       row.appendChild(text);
-      list.appendChild(row);
+
+// ✅ NEW: smart hover preview (auto-flips up/down)
+attachSmartHoverPreview(row, q);
+
+list.appendChild(row);
     });
   }
 
@@ -6805,94 +6964,99 @@ exportBtn.addEventListener("click", () => {
 });
  
 
-  const table = createEl(
-    "div",
-    "mt-1 border border-gray-200 rounded-lg overflow-auto",
-    []
-  );
-  // Header row
-  const header = createEl(
-    "div",
-    "min-w-max grid gap-1 px-2 py-1.5 text-[11px] font-medium bg-gray-50 text-gray-600",
-    []
-  );
-  header.style.gridTemplateColumns =
+  // OUTER frame (never grows wider than the page)
+const table = createEl(
+  "div",
+  "mt-1 border border-gray-200 rounded-lg overflow-hidden w-full max-w-full",
+  []
+);
+
+// INNER scroller (horizontal scroll lives here)
+const scroller = createEl(
+  "div",
+  "w-full max-w-full overflow-auto max-h-[60vh]",
+  []
+);
+  table.appendChild(scroller);
+
+// Header row
+const header = createEl(
+  "div",
+  "min-w-max sticky top-0 z-40 grid gap-1 px-2 py-1.5 text-[11px] font-medium bg-gray-50 text-gray-600",
+  []
+);
+header.style.gridTemplateColumns =
   "minmax(180px, 2fr) repeat(" +
   classAssignments.length +
   ", minmax(80px, 1fr))";
 
-header.appendChild(createEl("div", "", ["Student"]));
+// ✅ Sticky first column header (optional but recommended)
+header.appendChild(
+  createEl("div", "sticky left-0 z-50 bg-gray-50", ["Student"])
+);
+
 classAssignments.forEach((a) => {
   const label = a.title || "Untitled";
-  const cell = createEl(
-    "button",
-    "text-left hover:underline",
-    [label]
-  );
+  const cell = createEl("button", "text-left hover:underline", [label]);
   cell.type = "button";
   cell.addEventListener("click", () => {
-  TeacherResultsState.focusAssignmentId = a.id;
-  AppState.currentTab = "results";
-  renderTabs();
-  renderTeacherResults();
-});
+    TeacherResultsState.focusAssignmentId = a.id;
+    AppState.currentTab = "results";
+    renderTabs();
+    renderTeacherResults();
+  });
   header.appendChild(cell);
 });
-  
-  table.appendChild(header);
 
-  const body = createEl("div", "min-w-max", []);
-  students.forEach((s) => {
-    const row = createEl(
-      "div",
-      "grid gap-1 px-2 py-1.5 text-[11px] items-center border-t border-gray-50 hover:bg-gray-50",
-      []
-    );
-    row.style.gridTemplateColumns =
-      "minmax(180px, 2fr) repeat(" +
-      classAssignments.length +
-      ", minmax(80px, 1fr))";
+scroller.appendChild(header);
 
-    const nameBtn = createEl(
-      "button",
-      "text-left text-gray-900 hover:underline",
-      [s.name]
-    );
-    nameBtn.type = "button";
-    nameBtn.addEventListener("click", () => {
-      openStudentProgressModal(
-        s.id,
-        s.name || s.email || ""
-      );
-    });
+// Body rows
+const body = createEl("div", "min-w-max", []);
 
-    row.appendChild(nameBtn);
+students.forEach((s) => {
+  const row = createEl(
+    "div",
+    "grid gap-1 px-2 py-1.5 text-[11px] items-center border-t border-gray-50 hover:bg-gray-50 group",
+    []
+  );
+  row.style.gridTemplateColumns =
+    "minmax(180px, 2fr) repeat(" +
+    classAssignments.length +
+    ", minmax(80px, 1fr))";
 
-    classAssignments.forEach((a) => {
-      const key = `${s.id}__${a.id}`;
-      const sub = latest[key];
-      let percent = "";
-      if (sub && typeof sub.scorePercent === "number") {
-        percent = Math.round(sub.scorePercent) + "%";
-      }
-
-      const cell = createEl(
-        "div",
-        "text-center text-gray-700",
-        [percent || "—"]
-      );
-      row.appendChild(cell);
-    });
-
-    body.appendChild(row);
+  const nameBtn = createEl(
+    "button",
+    "text-left text-gray-900 hover:underline sticky left-0 z-20 bg-white group-hover:bg-gray-50",
+    [s.name]
+  );
+  nameBtn.type = "button";
+  nameBtn.addEventListener("click", () => {
+    openStudentProgressModal(s.id, s.name || s.email || "");
   });
 
-  table.appendChild(body);
-  wrapper.appendChild(table);
+  row.appendChild(nameBtn);
 
+  classAssignments.forEach((a) => {
+    const key = `${s.id}__${a.id}`;
+    const sub = latest[key];
+    let percent = "";
+    if (sub && typeof sub.scorePercent === "number") {
+      percent = Math.round(sub.scorePercent) + "%";
+    }
+
+    const cell = createEl("div", "text-center text-gray-700", [percent || "—"]);
+    row.appendChild(cell);
+  });
+
+  body.appendChild(row);
+});
+
+scroller.appendChild(body);
+wrapper.appendChild(table);
   content.innerHTML = "";
   content.appendChild(wrapper);
 } // <-- end of renderTeacherGrades
+  
 
 
 // CSV helper is a separate top-level function
