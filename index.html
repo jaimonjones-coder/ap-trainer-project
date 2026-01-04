@@ -8072,10 +8072,9 @@ auth.onAuthStateChanged(async (user) => {
 
   const subtitle = $("user-subtitle");
   if (subtitle) {
-    subtitle.textContent = `${
-      user.email || (profile?.isDemo ? "Demo account" : "No email")
-    } · ${AppState.role === "teacher" ? "Teacher" : "Student"} mode`;
-  }
+  const modeLabel = `${AppState.role === "teacher" ? "Teacher" : "Student"} mode`;
+  subtitle.textContent = profile?.isDemo ? `Demo account · ${modeLabel}` : modeLabel;
+}
 
   showAppView(true);
   renderTabs();
