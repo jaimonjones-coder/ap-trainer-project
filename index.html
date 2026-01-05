@@ -755,11 +755,12 @@ function formatShortDateTime(input) {
 
       // ---------------- Global app state ----------------
       const AppState = {
-        user: null,
-        role: "student", // "student" | "teacher"
-        currentTab: null,
-        currentQuiz: null,
-      };
+  user: null,
+  role: "student", // "student" | "teacher"
+  currentTab: null,
+  currentQuiz: null,
+  practiceResults: null, // ✅ holds last submitted results so they persist
+};
 // ---------------- Real-time + Offline UX (Rubric 3.3 + 7.2) ----------------
 const SyncUI = (() => {
   const DOT = {
@@ -3306,6 +3307,7 @@ let combined = [...srQs, ...weakQuestions];
       let quizTimerInterval = null;
 
       function startQuizSession({ mode, assignment, questions, timeLimitMinutes }) {
+       AppState.practiceResults = null;
         AppState.currentQuiz = {
           mode,
           assignment: assignment || null,
@@ -3516,6 +3518,142 @@ function renderQuiz() {
   content.innerHTML = "";
   content.appendChild(wrapper);
 }
+function renderQuizResultsScreen(results) {
+  const content = $("tab-content");
+  if (!content) return;
+
+  const wrapper = createEl("div", "space-y-3", []);
+
+  // Top bar with a back button
+  const top = createEl("div", "flex items-center justify-between", []);
+  const backLabel =
+    results.mode === "assignment" ? "Back to assignments" : "Back to practice";
+
+  const backBtn = createEl(
+    "button",
+    "px-3 py-1.5 rounded-lg border border-gray-300 text-sm hover:bg-gray-50",
+    [backLabel]
+  );
+  backBtn.type = "button";
+  backBtn.addEventListener("click", () => {
+    AppState.practiceResults = null;
+    AppState.currentQuiz = null;
+    AppState.currentTab = results.mode === "assignment" ? "assignments" : "practice";
+    renderTabs();
+    renderCurrentTab();
+  });
+
+  top.appendChild(backBtn);
+  wrapper.appendChild(top);
+
+  // Summary
+  const title =
+    results.mode === "assignment"
+      ? `Results${results.assignmentTitle ? ` • ${results.assignmentTitle}` : ""}`
+      : "Practice Results";
+
+  wrapper.appendChild(createEl("h2", "text-xl font-semibold", [title]));
+
+  const summary = createEl("div", "text-sm text-gray-700", [
+    `${results.correctCount}/${results.total} correct (${Math.round(results.scorePercent)}%)`,
+    results.autoFromTimer ? " • Time expired" : "",
+  ]);
+  wrapper.appendChild(summary);
+
+  // Per-unit performance
+  if (results.perUnit && Object.keys(results.perUnit).length) {
+    const detailCard = createEl("div", "border rounded-xl p-3 bg-white", []);
+    detailCard.appendChild(
+      createEl("div", "font-medium mb-2", ["Performance by unit"])
+    );
+
+    Object.keys(results.perUnit)
+      .sort((a, b) => Number(a) - Number(b))
+      .forEach((unit) => {
+        const data = results.perUnit[unit] || { correct: 0, answered: 0 };
+        const acc = data.answered ? data.correct / data.answered : 0;
+        detailCard.appendChild(unitBar(unit, acc, data.answered, "bg-blue-600"));
+      });
+
+    wrapper.appendChild(detailCard);
+  }
+
+  // Question review (shows explanations for BOTH assignment + practice)
+  if (results.questionResults && results.questionResults.length) {
+    const qWrap = createEl("div", "space-y-3", []);
+    qWrap.appendChild(createEl("h3", "text-lg font-semibold", ["Question review"]));
+
+    results.questionResults.forEach((r, idx) => {
+      const card = createEl("div", "border rounded-xl p-3 bg-white", []);
+
+      const questionText = r.question || r.questionText || "";
+      const options = Array.isArray(r.options) ? r.options : [];
+
+      const chosenIndex =
+        r.chosenIndex !== undefined ? r.chosenIndex :
+        r.selectedIndex !== undefined ? r.selectedIndex :
+        null;
+
+      const correctIndex =
+        r.correctIndex !== undefined ? r.correctIndex :
+        null;
+
+      const selectedText =
+        chosenIndex != null && options[chosenIndex] != null ? options[chosenIndex] : "—";
+
+      const correctText =
+        correctIndex != null && options[correctIndex] != null ? options[correctIndex] : "—";
+
+      card.appendChild(
+        createEl("div", "flex items-center justify-between mb-2", [
+          createEl("div", "font-medium", [`Q${idx + 1}`]),
+          createEl(
+            "div",
+            r.isCorrect
+              ? "text-green-600 text-sm font-medium"
+              : "text-red-600 text-sm font-medium",
+            [r.isCorrect ? "Correct" : "Incorrect"]
+          ),
+        ])
+      );
+
+      card.appendChild(createEl("div", "text-gray-900 mb-2", [questionText]));
+
+      card.appendChild(
+        createEl("div", "text-sm text-gray-700 mb-1", ["Your answer: ", selectedText])
+      );
+
+      card.appendChild(
+        createEl("div", "text-sm text-gray-700 mb-2", ["Correct answer: ", correctText])
+      );
+
+      if (r.explanation) {
+        card.appendChild(createEl("div", "text-sm text-gray-800", [r.explanation]));
+      }
+
+      const notes = r.distractorNotes || r.distractorNote || null;
+      if (Array.isArray(notes) && notes.length) {
+        const dl = createEl("div", "mt-2 text-sm text-gray-700", []);
+        dl.appendChild(
+          createEl("div", "font-medium mb-1", ["Why the other choices are wrong:"])
+        );
+
+        const ul = createEl("ul", "list-disc pl-5 space-y-1", []);
+        notes.forEach((note) => ul.appendChild(createEl("li", "", [note])));
+        dl.appendChild(ul);
+        card.appendChild(dl);
+      }
+
+      qWrap.appendChild(card);
+    });
+
+    wrapper.appendChild(qWrap);
+  }
+
+  content.innerHTML = "";
+  content.appendChild(wrapper);
+}
+
 async function finishQuiz(autoFromTimer) {
         const quiz = AppState.currentQuiz;
         if (!quiz) return;
@@ -3590,127 +3728,22 @@ async function finishQuiz(autoFromTimer) {
           }
         }
 
-        const content = $("tab-content");
-        const wrapper = createEl("div", "space-y-3", []);
-        wrapper.appendChild(
-          createEl("h2", "text-sm font-semibold text-gray-900", [
-            autoFromTimer ? "Time's up! Here's how you did:" : "Results",
-          ])
-        );
-        wrapper.appendChild(
-          createEl("p", "text-xs text-gray-600", [
-            `You answered ${correctCount} of ${total} correctly (${Math.round(
-              scorePercent
-            )}%).`,
-          ])
-        );
+        const quizResults = {
+  mode: quiz.mode === "assignment" ? "assignment" : "practice",
+  autoFromTimer: !!autoFromTimer,
+  correctCount,
+  total,
+  scorePercent,
+  perUnit,
+  questionResults,
+  assignmentTitle: quiz.assignment?.title || null,
+};
 
-        const perUnitCard = createEl(
-          "div",
-          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
-          []
-        );
-        perUnitCard.appendChild(
-          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
-            "By-unit breakdown",
-          ])
-        );
-        Object.entries(perUnit).forEach(([unit, data]) => {
-          const acc = data.answered > 0 ? data.correct / data.answered : 0;
-          perUnitCard.appendChild(
-            unitBar(unit, acc, data.answered, "bg-blue-600")
-          );
-        });
-        wrapper.appendChild(perUnitCard);
-
-        const detailCard = createEl(
-          "div",
-          "bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm",
-          []
-        );
-        detailCard.appendChild(
-          createEl("h3", "text-xs font-semibold text-gray-800 mb-2", [
-            "Question review",
-          ])
-        );
-
-        questionResults.forEach((qr, idx) => {
-          const qWrap = createEl(
-            "div",
-            "border border-gray-200 rounded-lg p-3 space-y-1",
-            []
-          );
-          qWrap.appendChild(
-            createEl("p", "text-xs font-semibold text-gray-900", [
-              `${idx + 1}. ${qr.question}`,
-            ])
-          );
-          const yourAnsText =
-            qr.chosenIndex == null
-              ? "No answer selected"
-              : qr.options[qr.chosenIndex];
-          const yourAnsClass =
-            qr.chosenIndex == null
-              ? "text-gray-600"
-              : qr.isCorrect
-              ? "text-green-700"
-              : "text-red-700";
-          qWrap.appendChild(
-            createEl("p", "text-sm " + yourAnsClass, [
-              "Your answer: ",
-              yourAnsText,
-            ])
-          );
-          qWrap.appendChild(
-            createEl("p", "text-sm text-gray-800", [
-              "Correct answer: ",
-              qr.options[qr.correctIndex],
-            ])
-          );
-          if (qr.explanation) {
-            qWrap.appendChild(
-              createEl("p", "text-sm text-gray-700 mt-1", [
-                "Explanation: ",
-                qr.explanation,
-              ])
-            );
-          }
-// Per-choice "magic" explanations
-if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
-  const explList = createEl(
-    "ul",
-    "mt-1 space-y-1 text-sm text-gray-700",
-    []
-  );
-
-  qr.options.forEach((opt, i) => {
-    const letter = String.fromCharCode(65 + i); // A, B, C, D...
-    const note = qr.distractorNotes[letter];
-
-    explList.appendChild(
-      createEl("li", "", [
-        `${letter}. ${opt} — `,
-        note ||
-          (i === qr.correctIndex
-            ? "This is the correct answer."
-            : "This option is incorrect."),
-      ])
-    );
-  });
-
-  qWrap.appendChild(explList);
-}
-
-
-          detailCard.appendChild(qWrap);
-        });
-
-        wrapper.appendChild(detailCard);
-        content.innerHTML = "";
-        content.appendChild(wrapper);
-
-        AppState.currentQuiz = null;
-      }
+AppState.practiceResults = quizResults; // persist across re-renders
+AppState.currentQuiz = null;           // end the active quiz
+renderQuizResultsScreen(quizResults);
+return;
+  }
       // ---------------- Student Views ----------------
       async function renderStudentDashboard() {
         const content = $("tab-content");
@@ -7889,13 +7922,16 @@ function renderAssignmentStatusDetail(
           } else if (AppState.currentTab === "assignments") {
             await renderStudentAssignments();
           } else if (AppState.currentTab === "practice") {
-            content.innerHTML = "";
-            if (AppState.currentQuiz) {
-              renderQuiz();
-            } else {
-              content.appendChild(renderPracticePanel());
-            }
-          } else if (AppState.currentTab === "analytics") {
+  content.innerHTML = "";
+  if (AppState.currentQuiz) {
+    renderQuiz();
+  } else if (AppState.practiceResults) {
+    renderQuizResultsScreen(AppState.practiceResults);
+  } else {
+    content.appendChild(renderPracticePanel());
+  }
+}
+ else if (AppState.currentTab === "analytics") {
             await renderStudentAnalytics();
           }
         } else {
