@@ -465,6 +465,45 @@ function buildQuestionHoverPreview(q, { align = "left" } = {}) {
   }
   return el;
 }
+function computeAnswerVisibility(assignment) {
+  // Default behavior (practice, missing assignment, legacy docs):
+  // show answers unless explicitly turned off.
+  if (!assignment) return { canShowAnswers: true, lockedMessage: "" };
+
+  const showAnswers = assignment.showAnswers !== false;
+  if (!showAnswers) {
+    return {
+      canShowAnswers: false,
+      lockedMessage: "Answers are hidden for this assignment.",
+    };
+  }
+
+  // Optional “release after due date” behavior
+  if (assignment.revealAnswersAfterDue) {
+    const dueIso = assignment.dueAt;
+    const dueMs = dueIso ? Date.parse(dueIso) : NaN;
+
+    if (!dueIso || !Number.isFinite(dueMs)) {
+      return {
+        canShowAnswers: false,
+        lockedMessage:
+          "Answers will be released after the due date, but no due date is set.",
+      };
+    }
+
+    if (Date.now() < dueMs) {
+      return {
+        canShowAnswers: false,
+        lockedMessage: `Answers will be available after ${new Date(
+          dueMs
+        ).toLocaleString()}.`,
+      };
+    }
+  }
+
+  return { canShowAnswers: true, lockedMessage: "" };
+}
+
 // ---------------- Hover preview (smart position + auto-flip) ----------------
 function removeAllQuestionPreviews() {
   document.querySelectorAll(".q-hover-preview").forEach((el) => el.remove());
@@ -3579,7 +3618,15 @@ function renderQuizResultsScreen(results) {
   }
 
   // Question review (shows explanations for BOTH assignment + practice)
-  if (results.questionResults && results.questionResults.length) {
+if (results.canShowAnswers === false) {
+  wrapper.appendChild(
+    createEl(
+      "div",
+      "border rounded-xl p-3 bg-gray-50 text-sm text-gray-700",
+      [results.answersLockedMessage || "Answers are not available yet."]
+    )
+  );
+} else if (results.questionResults && results.questionResults.length) {
     const qWrap = createEl("div", "space-y-3", []);
     qWrap.appendChild(createEl("h3", "text-lg font-semibold", ["Question review"]));
 
@@ -3728,7 +3775,12 @@ async function finishQuiz(autoFromTimer) {
           }
         }
 
-        const quizResults = {
+        const vis =
+  quiz.mode === "assignment"
+    ? computeAnswerVisibility(quiz.assignment)
+    : { canShowAnswers: true, lockedMessage: "" };
+
+const results = {
   mode: quiz.mode === "assignment" ? "assignment" : "practice",
   autoFromTimer: !!autoFromTimer,
   correctCount,
@@ -3737,12 +3789,17 @@ async function finishQuiz(autoFromTimer) {
   perUnit,
   questionResults,
   assignmentTitle: quiz.assignment?.title || null,
+
+  // NEW
+  canShowAnswers: vis.canShowAnswers,
+  answersLockedMessage: vis.lockedMessage,
 };
 
-AppState.practiceResults = quizResults; // persist across re-renders
-AppState.currentQuiz = null;           // end the active quiz
-renderQuizResultsScreen(quizResults);
+AppState.practiceResults = results; // persist across re-renders
+AppState.currentQuiz = null;        // end the active quiz
+renderQuizResultsScreen(results);
 return;
+
   }
       // ---------------- Student Views ----------------
       async function renderStudentDashboard() {
@@ -3976,39 +4033,62 @@ classes =
   content.appendChild(wrapper);
 }
 
+function renderSubmissionReview(sub, opts = {}) {
+  const content = $("tab-content");
+  if (!content) return;
 
-      function renderSubmissionReview(sub) {
-        const content = $("tab-content");
-        const wrapper = createEl("div", "space-y-3", []);
-        wrapper.appendChild(
-          createEl("h2", "text-sm font-semibold text-gray-900", [
-            "Submission review",
-          ])
-        );
-        wrapper.appendChild(
-          createEl("p", "text-sm text-gray-600", [
-            `Score: ${Math.round(sub.scorePercent || 0)}% · ${
-              sub.correctCount || 0
-            }/${sub.totalQuestions || 0}`,
-          ])
-        );
+  const wrapper = createEl("div", "space-y-3", []);
+  wrapper.appendChild(
+    createEl("h2", "text-sm font-semibold text-gray-900", ["Submission review"])
+  );
+  wrapper.appendChild(
+    createEl("p", "text-sm text-gray-600", [
+      `Score: ${Math.round(sub.scorePercent || 0)}% · ${sub.correctCount || 0}/${sub.totalQuestions || 0}`,
+    ])
+  );
 
-        const list = createEl(
-          "div",
-          "bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm",
-          []
-        );
-        (sub.questionResults || []).forEach((qr, idx) => {
-          const qWrap = createEl(
-            "div",
-            "border border-gray-200 rounded-lg p-3 space-y-1",
-            []
-          );
-          qWrap.appendChild(
-            createEl("p", "text-xs font-semibold text-gray-900", [
-              `${idx + 1}. ${qr.question}`,
-            ])
-          );
+  const canShowAnswers =
+    opts.canShowAnswers !== undefined ? opts.canShowAnswers : true;
+
+  if (!canShowAnswers) {
+    const msg =
+      opts.lockedMessage ||
+      (opts.assignment?.dueAt
+        ? `Answers will be available after the due date: ${new Date(
+            opts.assignment.dueAt
+          ).toLocaleString()}.`
+        : "Answers are not available yet.");
+
+    wrapper.appendChild(
+      createEl(
+        "div",
+        "border rounded-xl p-3 bg-gray-50 text-sm text-gray-700",
+        [msg]
+      )
+    );
+
+    content.innerHTML = "";
+    content.appendChild(wrapper);
+    return;
+  }
+
+  const list = createEl(
+    "div",
+    "bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm",
+    []
+  );
+
+  (sub.questionResults || []).forEach((qr, idx) => {
+    const qWrap = createEl(
+      "div",
+      "border border-gray-200 rounded-lg p-3 space-y-1",
+      []
+    );
+    qWrap.appendChild(
+      createEl("p", "text-xs font-semibold text-gray-900", [
+        `${idx + 1}. ${qr.question}`,
+      ])
+    );     
           const yourAnsText =
             qr.chosenIndex == null
               ? "No answer selected"
@@ -4198,68 +4278,107 @@ statusRow.appendChild(pill);
 left.appendChild(statusRow);
 
             const right = createEl("div", "flex gap-2 items-center", []);
-            const startBtn = createEl(
-              "button",
-              "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-              [lastSub ? "Start / Retake" : "Start"]
-            );
-            startBtn.addEventListener("click", async () => {
-              let questions = [];
-              try {
-                if (a.type === "custom" && Array.isArray(a.customQuestionIds)) {
-                  questions = await QuestionService.getByIds(
-                    a.customQuestionIds
-                  );
-                } else if (a.type === "unit" && Array.isArray(a.units)) {
-                  const unit = a.units[0];
-                  questions = await QuestionService.getQuestions({ unit });
-                } else if (
-                  (a.type === "cumulative" || a.type === "mixed") &&
-                  Array.isArray(a.units) &&
-                  a.units.length
-                ) {
-                  let pool = [];
-                  for (const u of a.units) {
-                    const qs = await QuestionService.getQuestions({ unit: u });
-                    pool = pool.concat(qs);
-                  }
-                  const unique = Array.from(
-                    new Map(pool.map((q) => [q.id, q])).values()
-                  );
-                  questions = unique;
-                } else {
-                  questions = await QuestionService.getQuestions();
-                }
-              } catch (e) {
-                console.error("Assignment question load error", e);
-                Toast.show(
-                  "No questions available for this assignment.",
-                  "error"
-                );
-                return;
-              }
+           // ✅ Enforce retake rules
+const hasAttempt = !!lastSub;
+const canRetake = !!a.allowMultipleAttempts; // comes from teacher toggle
+const canStart = !hasAttempt || canRetake;
 
-              if (!questions.length) {
-                Toast.show(
-                  "No questions available for this assignment.",
-                  "error"
-                );
-                return;
-              }
+const startLabel = !hasAttempt ? "Start" : canRetake ? "Retake" : "Completed";
 
-              if (a.randomizeQuestions !== false) {
-                questions = [...questions].sort(() => Math.random() - 0.5);
-              }
-              if (a.questionCount && questions.length > a.questionCount) {
-                questions = questions.slice(0, a.questionCount);
-              }
+const startBtn = createEl(
+  "button",
+  canStart
+    ? "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    : "px-3 py-1.5 rounded-lg bg-gray-200 text-gray-500 text-sm cursor-not-allowed",
+  [startLabel]
+);
 
-              startQuizSession({
-                mode: "assignment",
-                assignment: a,
-                questions,
-              });
-            });
+startBtn.type = "button";
+startBtn.disabled = !canStart;
+startBtn.addEventListener("click", async () => {
+  // Enforce "no retakes"
+  if (lastSub && a.allowMultipleAttempts === false) {
+    Toast.show("Retakes are disabled for this assignment.", "info");
+    return;
+  }
+
+  let questions = [];
+
+  try {
+    const type = a.type || "mixed";
+
+    // 1) Custom assignment: load by stored ids
+    if (
+      type === "custom" &&
+      Array.isArray(a.customQuestionIds) &&
+      a.customQuestionIds.length
+    ) {
+      questions = await QuestionService.getByIds(a.customQuestionIds);
+    }
+
+    // 2) Unit assignment: load by the single unit
+    else if (
+      type === "unit" &&
+      Array.isArray(a.units) &&
+      a.units.length
+    ) {
+      questions = await QuestionService.getQuestions({ unit: Number(a.units[0]) });
+    }
+
+    // 3) Mixed/Cumulative: load from multiple units and de-dupe
+    else if (
+      (type === "mixed" || type === "cumulative") &&
+      Array.isArray(a.units) &&
+      a.units.length
+    ) {
+      let pool = [];
+      for (const unit of a.units) {
+        const qs = await QuestionService.getQuestions({ unit: Number(unit) });
+        pool = pool.concat(qs);
+      }
+      questions = Array.from(new Map(pool.map((q) => [q.id, q])).values());
+    }
+
+    // 4) Backward compatibility: if some assignments store questionIds
+    else if (Array.isArray(a.questionIds) && a.questionIds.length) {
+      questions = await QuestionService.getByIds(a.questionIds);
+    }
+
+    // 5) Fallback: everything (should rarely happen for assignments)
+    else {
+      questions = await QuestionService.getQuestions();
+    }
+  } catch (e) {
+    console.error("Load assignment questions error", e);
+    Toast.show("Unable to load questions. Check Firestore rules.", "error");
+    return;
+  }
+
+  questions = (questions || []).filter(Boolean);
+
+  // Shuffle unless explicitly turned off
+  const shouldShuffle =
+    a.randomizeQuestions === true || a.randomizeQuestions === undefined;
+  if (shouldShuffle) {
+    questions = [...questions].sort(() => Math.random() - 0.5);
+  }
+
+  // Apply question limit (supports multiple legacy field names)
+  const limit = Number(
+    a.questionCount ?? a.numQuestions ?? a.totalQuestions ?? 0
+  );
+  if (limit > 0) {
+    questions = questions.slice(0, limit);
+  }
+
+  if (!questions.length) {
+    Toast.show("No questions available.", "error");
+    return;
+  }
+
+  startQuizSession({ mode: "assignment", assignment: a, questions });
+});
+
             right.appendChild(startBtn);
 
             if (lastSub) {
@@ -4269,7 +4388,9 @@ left.appendChild(statusRow);
                 ["Review"]
               );
               reviewBtn.addEventListener("click", () => {
-                renderSubmissionReview(lastSub);
+                const vis = computeAnswerVisibility(a); // 'a' is the assignment object in that scope
+renderSubmissionReview(lastSub, vis);
+(lastSub);
               });
               right.appendChild(reviewBtn);
             }
@@ -5974,44 +6095,56 @@ try {
 
         createCard.appendChild(formGrid);
 
-        // Settings toggles
-        const settingsRow = createEl(
-          "div",
-          "flex flex-wrap gap-3 mt-1 text-sm",
-          []
-        );
-        const multipleAttemptsInput = document.createElement("input");
-        multipleAttemptsInput.type = "checkbox";
-        const showAnswersInput = document.createElement("input");
-        showAnswersInput.type = "checkbox";
-        const randomizeInput = document.createElement("input");
-        randomizeInput.type = "checkbox";
-        randomizeInput.checked = true;
+      // Settings toggles
+const settingsRow = createEl(
+  "div",
+  "flex flex-wrap gap-3 mt-1 text-sm",
+  []
+);
 
-        const mkToggle = (input, label) => {
-          const wrap = createEl(
-            "label",
-            "inline-flex items-center gap-1 cursor-pointer",
-            []
-          );
-          input.className = "h-3 w-3 text-blue-600";
-          wrap.appendChild(input);
-          wrap.appendChild(
-            createEl("span", "text-sm text-gray-700", [label])
-          );
-          return wrap;
-        };
+const multipleAttemptsInput = document.createElement("input");
+multipleAttemptsInput.type = "checkbox";
 
-        settingsRow.appendChild(
-          mkToggle(multipleAttemptsInput, "Allow multiple attempts")
-        );
-        settingsRow.appendChild(
-          mkToggle(showAnswersInput, "Show answers on submit")
-        );
-        settingsRow.appendChild(
-          mkToggle(randomizeInput, "Randomize question order")
-        );
-        createCard.appendChild(settingsRow);
+const showAnswersInput = document.createElement("input");
+showAnswersInput.type = "checkbox";
+
+// NEW: hide answers until due date (only makes sense if a due date is set)
+const hideAnswersUntilDueInput = document.createElement("input");
+hideAnswersUntilDueInput.type = "checkbox";
+
+const randomizeInput = document.createElement("input");
+randomizeInput.type = "checkbox";
+randomizeInput.checked = true;
+
+const mkToggle = (input, label) => {
+  const wrap = createEl(
+    "label",
+    "inline-flex items-center gap-1 cursor-pointer",
+    []
+  );
+  input.className = "h-3 w-3 text-blue-600";
+  wrap.appendChild(input);
+  wrap.appendChild(createEl("span", "text-sm text-gray-700", [label]));
+  return wrap;
+};
+
+// Disable the new toggle unless a due date exists (prevents confusing states)
+const syncHideAnswersUntilDue = () => {
+  const hasDue = !!(dueInput && dueInput.value && dueInput.value.length);
+  hideAnswersUntilDueInput.disabled = !hasDue;
+  if (!hasDue) hideAnswersUntilDueInput.checked = false;
+};
+if (dueInput) {
+  dueInput.addEventListener("change", syncHideAnswersUntilDue);
+}
+syncHideAnswersUntilDue();
+
+settingsRow.appendChild(mkToggle(multipleAttemptsInput, "Allow multiple attempts"));
+settingsRow.appendChild(mkToggle(showAnswersInput, "Show answers on submit"));
+settingsRow.appendChild(mkToggle(hideAnswersUntilDueInput, "Hide answers until due date"));
+settingsRow.appendChild(mkToggle(randomizeInput, "Randomize question order"));
+
+createCard.appendChild(settingsRow);
 
         // Custom question picker
         let currentCustomQuestionIds = [];
@@ -6534,8 +6667,10 @@ renderPickerList();
                 : questionCountNumber,
             timeLimitMinutes,
             allowMultipleAttempts: multipleAttemptsInput.checked,
-            showAnswers: showAnswersInput.checked,
-            randomizeQuestions: randomizeInput.checked,
+showAnswers: showAnswersInput.checked,
+revealAnswersAfterDue: showAnswersInput.checked && hideAnswersUntilDueInput.checked,
+randomizeQuestions: randomizeInput.checked,
+
             dueAt,
             customQuestionIds: currentCustomQuestionIds.slice(),
           };
