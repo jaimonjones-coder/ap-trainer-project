@@ -1512,16 +1512,33 @@ async listAssignmentsForTeacher(teacherId) {
             .get();
           return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         },
+async listSubmissionsForAssignment(assignmentId) {
+  const snap = await db
+    .collection("submissions")
+    .where("assignmentId", "==", assignmentId)
+    .orderBy("completedAt", "desc")
+    .get();
 
-        async listSubmissionsForAssignment(assignmentId) {
-          const snap = await db
-            .collection("submissions")
-            .where("assignmentId", "==", assignmentId)
-            .orderBy("completedAt", "desc")
-            .get();
-          return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        },
-async getQuestions(filter = {}) {
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+},
+
+// Mark a submission as voided/unsubmitted (teacher action)
+async voidSubmission(submissionId, teacherId) {
+  if (!submissionId) return;
+
+  const ref = db.collection("submissions").doc(submissionId);
+  await ref.update({
+    voided: true,
+    voidedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    voidedBy: teacherId || null,
+  });
+},
+
+// Convenience wrapper the UI can call
+async unsubmitSubmission(submissionId) {
+  return this.voidSubmission(submissionId, AppState.user?.uid || null);
+},
+   async getQuestions(filter = {}) {
   let ref = db.collection("questions");
 
   if (filter.unit != null) {
@@ -2056,7 +2073,11 @@ async function openStudentProgressModal(studentId, label) {
     const unitSummary = AnalyticsService.summarizeUnits(overview.unitStats);
 
     const recent = (subs || []).slice(0, 5); // last 5 submissions
-
+// Map assignmentId -> title so Recent results can show the real name
+const assignmentTitleById = {};
+(TeacherResultsState.assignments || []).forEach((a) => {
+  assignmentTitleById[a.id] = a.title || "Assignment";
+});
     const wrapper = createEl("div", "space-y-3", []);
 
     const pct =
@@ -2146,11 +2167,11 @@ async function openStudentProgressModal(studentId, label) {
         const when = s.completedAt
           ? new Date(s.completedAt).toLocaleString()
           : "";
-        const labelLine =
-          typeof s.mode === "string" && s.mode === "assignment"
-            ? "Assignment"
-            : "Practice";
-
+        
+const labelLine =
+  s.mode === "assignment"
+    ? (assignmentTitleById[s.assignmentId] || "Assignment")
+    : "Practice";
         const row = createEl(
           "div",
           "flex items-center justify-between border border-gray-100 rounded-lg px-2 py-1.5",
@@ -2162,16 +2183,76 @@ async function openStudentProgressModal(studentId, label) {
           ]),
           createEl("p", "text-xs text-gray-500", [when || ""]),
         ]);
-        const right = createEl("div", "text-right", [
-          createEl(
-            "p",
-            "text-sm font-semibold text-gray-900",
-            [score]
-          ),
-          createEl("p", "text-xs text-gray-500", [
-            `${s.correctCount || 0}/${s.totalQuestions || 0} correct`,
-          ]),
-        ]);
+        const right = createEl(
+  "div",
+  "text-right flex flex-col items-end gap-1",
+  []
+);
+
+right.appendChild(
+  createEl("p", "text-sm font-semibold text-gray-900", [score])
+);
+
+right.appendChild(
+  createEl("p", "text-xs text-gray-500", [
+    `${s.correctCount || 0}/${s.totalQuestions || 0} correct`,
+  ])
+);
+
+// Actions row
+const actions = createEl("div", "flex items-center justify-end gap-1 pt-1", []);
+
+// Review button (teacher can always review)
+const reviewBtn = createEl(
+  "button",
+  "px-2 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500",
+  ["Review"]
+);
+reviewBtn.type = "button";
+reviewBtn.addEventListener("click", () => {
+  renderSubmissionReview(s, { canShowAnswers: true });
+});
+actions.appendChild(reviewBtn);
+
+// Unsubmit only for assignment submissions (not practice)
+if (s.mode === "assignment" && s.assignmentId) {
+  if (s.voidedAt) {
+    actions.appendChild(
+      createEl("span", "text-[11px] text-gray-500 px-2", ["Unsubmitted"])
+    );
+  } else {
+    const unsubmitBtn = createEl(
+      "button",
+      "px-2 py-1 rounded-lg border border-amber-300 text-xs text-amber-800 bg-white hover:bg-amber-50 focus:outline-none focus:ring-1 focus:ring-amber-500",
+      ["Unsubmit"]
+    );
+    unsubmitBtn.type = "button";
+    unsubmitBtn.addEventListener("click", async () => {
+      const aTitle = assignmentTitleById[s.assignmentId] || "Assignment";
+const ok = window.confirm(
+  `Unsubmit "${aTitle}" so the student can complete it? (Their submission will be removed from counting.)`
+);
+if (!ok) return;
+
+      try {
+        unsubmitBtn.disabled = true;
+        await DataManager.unsubmitSubmission(s.id);
+        Toast.show("Submission unsubmitted.", "success");
+
+        // refresh modal content
+        openStudentProgressModal(studentId, label);
+      } catch (e) {
+        console.error("Unsubmit error", e);
+        Toast.show(e.message || "Could not unsubmit.", "error");
+      } finally {
+        unsubmitBtn.disabled = false;
+      }
+    });
+    actions.appendChild(unsubmitBtn);
+  }
+}
+
+right.appendChild(actions);
         row.appendChild(left);
         row.appendChild(right);
         recentCard.appendChild(row);
@@ -4284,10 +4365,12 @@ submissions = s || [];
         } else {
           const list = createEl("div", "space-y-2", []);
           assignments.forEach((a) => {
-            const subsForAssignment = submissions.filter(
-              (s) => s.assignmentId === a.id
-            );
-            const lastSub = subsForAssignment[0] || null;
+            const subsForAssignment = submissions
+  .filter((s) => s.assignmentId === a.id)
+  // ignore “unsubmitted/voided” attempts so the assignment re-opens
+  .filter((s) => !(s.voidedAt || s.voided === true));
+
+const lastSub = subsForAssignment[0] || null;
             const lastScore = lastSub?.scorePercent;
             const scoreLabel =
               lastScore == null ? "Not attempted yet" : `${Math.round(lastScore)}%`;
