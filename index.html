@@ -465,6 +465,92 @@ function buildQuestionHoverPreview(q, { align = "left" } = {}) {
   }
   return el;
 }
+// ------------------------------
+// TeacherDraftQuestionSet (shared between Results + Assignments)
+// ------------------------------
+const TeacherDraftQuestionSet = {
+  storageKey: "teacher_draft_custom_question_ids_v1",
+  ids: [],
+  openPickerOnNextRender: false,
+
+  load() {
+    try {
+      const raw = localStorage.getItem(this.storageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) this.ids = parsed.filter(Boolean);
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  save() {
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(this.ids || []));
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  set(nextIds) {
+    const clean = Array.from(new Set((nextIds || []).filter(Boolean)));
+    this.ids = clean;
+    this.save();
+  },
+
+  addMany(moreIds) {
+    this.set([...(this.ids || []), ...(moreIds || [])]);
+  },
+
+  clear() {
+    this.ids = [];
+    this.save();
+  },
+};
+
+TeacherDraftQuestionSet.load();
+// ---------------- Teacher assignment editing state ----------------
+const TeacherAssignmentEditState = {
+  assignmentId: null,
+  hasSubmissions: false,
+  begin(assignmentId, hasSubmissions) {
+    this.assignmentId = assignmentId;
+    this.hasSubmissions = !!hasSubmissions;
+  },
+  clear() {
+    this.assignmentId = null;
+    this.hasSubmissions = false;
+  },
+};
+
+// ISO -> <input type="datetime-local"> value (local time)
+function isoToDateTimeLocalValue(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+async function beginEditAssignment(assignmentId) {
+  let subs = [];
+  try {
+    subs = await DataManager.listSubmissionsForAssignment(assignmentId);
+  } catch (e) {
+    console.warn("Edit assignment: could not load submissions", e);
+  }
+
+  TeacherAssignmentEditState.begin(assignmentId, (subs || []).length > 0);
+  renderTeacherAssignments();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function cancelEditAssignment() {
+  TeacherAssignmentEditState.clear();
+  TeacherDraftQuestionSet.clear();
+  renderTeacherAssignments();
+}
 function computeAnswerVisibility(assignment) {
   // Default behavior (practice, missing assignment, legacy docs):
   // show answers unless explicitly turned off.
@@ -5886,16 +5972,56 @@ try {
           "bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm",
           []
         );
-        createCard.appendChild(
-          createEl("p", "text-sm font-semibold text-gray-800", [
-            "Create assignment",
-          ])
-        );
-        createCard.appendChild(
-          createEl("p", "text-sm text-gray-600", [
-            "Four assignment types, due dates, time limits, and optional custom question sets.",
-          ])
-        );
+        // Determine edit mode (you’ll need TeacherAssignmentEditState + beginEditAssignment from the earlier step)
+let editingAssignment = TeacherAssignmentEditState.assignmentId
+  ? assignments.find((x) => x.id === TeacherAssignmentEditState.assignmentId)
+  : null;
+
+if (TeacherAssignmentEditState.assignmentId && !editingAssignment) {
+  TeacherAssignmentEditState.clear();
+  editingAssignment = null;
+}
+
+const isEditing = !!editingAssignment;
+const isLocked = isEditing && TeacherAssignmentEditState.hasSubmissions;
+
+const headerRow = createEl("div", "flex items-center justify-between", []);
+headerRow.appendChild(
+  createEl("p", "text-sm font-semibold text-gray-800", [
+    isEditing ? "Edit assignment" : "Create assignment",
+  ])
+);
+
+if (isEditing) {
+  const cancelBtn = createEl(
+    "button",
+    "px-3 py-1.5 rounded-lg border border-gray-300 text-sm hover:bg-gray-50",
+    ["Cancel"]
+  );
+  cancelBtn.type = "button";
+  cancelBtn.addEventListener("click", cancelEditAssignment);
+  headerRow.appendChild(cancelBtn);
+}
+
+createCard.appendChild(headerRow);
+
+createCard.appendChild(
+  createEl("p", "text-sm text-gray-600", [
+    "Four assignment types, due dates, time limits, and optional custom question sets.",
+  ])
+);
+
+if (isLocked) {
+  createCard.appendChild(
+    createEl(
+      "div",
+      "border border-amber-200 bg-amber-50 text-amber-800 rounded-xl p-3 text-sm",
+      [
+        "This assignment already has student submissions. Question selection and attempt/time settings are locked.",
+      ]
+    )
+  );
+}
 
         if (!classes.length) {
           createCard.appendChild(
@@ -6147,7 +6273,7 @@ settingsRow.appendChild(mkToggle(randomizeInput, "Randomize question order"));
 createCard.appendChild(settingsRow);
 
         // Custom question picker
-        let currentCustomQuestionIds = [];
+        let currentCustomQuestionIds = (TeacherDraftQuestionSet.ids || []).slice();
         let customLabel = createEl(
           "span",
           "text-sm text-gray-500",
@@ -6184,7 +6310,7 @@ createCard.appendChild(settingsRow);
             } selected.`;
           }
         }
-
+updateCustomLabel();
 function openQuestionPicker() {
   const overlay = createEl(
     "div",
@@ -6213,8 +6339,10 @@ function openQuestionPicker() {
     ["Close"]
   );
   closeBtn.addEventListener("click", () => {
-    document.body.removeChild(overlay);
-  });
+  TeacherDraftQuestionSet.set(currentCustomQuestionIds);
+  updateCustomLabel();
+  document.body.removeChild(overlay);
+});
   header.appendChild(closeBtn);
   panel.appendChild(header);
 
@@ -6241,21 +6369,32 @@ function openQuestionPicker() {
     ["Done"]
   );
   doneBtn.addEventListener("click", () => {
-    updateCustomLabel();
-    document.body.removeChild(overlay);
-  });
+  TeacherDraftQuestionSet.set(currentCustomQuestionIds);
+  updateCustomLabel();
+  document.body.removeChild(overlay);
+});
   const clearBtn = createEl(
     "button",
     "px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
     ["Clear"]
   );
   clearBtn.addEventListener("click", () => {
-    currentCustomQuestionIds = [];
-    if (typeof renderPickerList === "function") {
-      renderPickerList();
-    }
-    summary.textContent = "0 questions selected.";
-  });
+  currentCustomQuestionIds = [];
+  TeacherDraftQuestionSet.clear();
+  updateCustomLabel();
+
+  // refresh the list UI if available, otherwise just uncheck visible boxes
+  if (typeof renderPickerList === "function") {
+    renderPickerList();
+  } else {
+    body.querySelectorAll("input[type='checkbox']").forEach((cb) => {
+      cb.checked = false;
+    });
+  }
+
+  summary.textContent = "0 questions selected.";
+});
+
   footer.appendChild(summary);
   const right = createEl("div", "flex items-center gap-2", []);
   right.appendChild(clearBtn);
@@ -6595,97 +6734,203 @@ renderPickerList();
         pickerBtn.addEventListener("click", () => {
           openQuestionPicker();
         });
+if (TeacherDraftQuestionSet.openPickerOnNextRender) {
+  TeacherDraftQuestionSet.openPickerOnNextRender = false;
+  setTimeout(() => openQuestionPicker(), 0);
+}
+        // --- If editing, prefill the builder from the existing assignment ---
+if (isEditing) {
+  titleInput.value = editingAssignment.title || "";
 
-        // Create assignment button
-        const createBtn = createEl(
-          "button",
-          "mt-3 inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-          ["Create assignment"]
-        );
-        createBtn.addEventListener("click", async () => {
-          if (!classes.length) {
-            Toast.show("Create a class first.", "error");
-            return;
-          }
-          const title = (titleInput.value || "").trim() || "Assignment";
-          const type = typeSelect.value;
-          const questionCountNumber = Number(countInput.value || 10);
-          const timeLimitMinutes =
-            timeSelect.value === ""
-              ? null
-              : Number(timeSelect.value || 0);
+  // keep class fixed during edit (prevents moving assignments between classes)
+  if (editingAssignment.classId) classSelect.value = editingAssignment.classId;
+  classSelect.disabled = true;
 
-          function collectSelectedUnits() {
-            const t = typeSelect.value;
-            if (t === "unit") {
-              const checked = unitOptionsEl.querySelector(
-                "input[name='unit-radio']:checked"
-              );
-              return checked ? [Number(checked.value)] : [];
-            }
-            if (t === "mixed" || t === "cumulative") {
-              return Array.from(
-                unitOptionsEl.querySelectorAll("input[type='checkbox']:checked")
-              ).map((cb) => Number(cb.value));
-            }
-            if (t === "all") {
-              return UNITS_META.map((u) => u.value);
-            }
-            return [];
-          }
+  typeSelect.value = editingAssignment.type || "mixed";
+  countInput.value = String(editingAssignment.questionCount || 10);
+  timeSelect.value =
+    editingAssignment.timeLimitMinutes == null
+      ? ""
+      : String(editingAssignment.timeLimitMinutes);
 
-          const units = collectSelectedUnits();
-          if (
-            (type === "unit" || type === "mixed" || type === "cumulative") &&
-            !units.length
-          ) {
-            Toast.show("Select at least one unit.", "error");
-            return;
-          }
-          if (type === "custom" && !currentCustomQuestionIds.length) {
-            Toast.show(
-              "Pick at least one question for the custom set.",
-              "error"
-            );
-            return;
-          }
+  multipleAttemptsInput.checked = !!editingAssignment.allowMultipleAttempts;
+  showAnswersInput.checked = !!editingAssignment.showAnswers;
 
-          const dueAt =
-            dueInput.value && dueInput.value.length
-              ? new Date(dueInput.value).toISOString()
-              : null;
+  // your schema: revealAnswersAfterDue is the "hide until due" behavior
+  hideAnswersUntilDueInput.checked = !!editingAssignment.revealAnswersAfterDue;
+  if (!showAnswersInput.checked) hideAnswersUntilDueInput.checked = false;
 
-          const data = {
-            title,
-            type,
-            teacherId,
-            classId: classSelect.value,
-            units,
-            questionCount:
-              type === "custom"
-                ? currentCustomQuestionIds.length
-                : questionCountNumber,
-            timeLimitMinutes,
-            allowMultipleAttempts: multipleAttemptsInput.checked,
-showAnswers: showAnswersInput.checked,
-revealAnswersAfterDue: showAnswersInput.checked && hideAnswersUntilDueInput.checked,
-randomizeQuestions: randomizeInput.checked,
+  randomizeInput.checked = !!editingAssignment.randomizeQuestions;
 
-            dueAt,
-            customQuestionIds: currentCustomQuestionIds.slice(),
-          };
+  dueInput.value = isoToDateTimeLocalValue(editingAssignment.dueAt);
 
-          try {
-            await DataManager.createAssignment(data);
-            Toast.show("Assignment created.", "success");
-            renderTeacherAssignments();
-          } catch (e) {
-            console.error("Create assignment error", e);
-            Toast.show(e.message || "Error creating assignment.", "error");
-          }
-        });
+  // Units UI: clear then re-check
+  unitOptionsEl
+    .querySelectorAll("input[type='checkbox'], input[name='unit-radio']")
+    .forEach((i) => (i.checked = false));
 
-        createCard.appendChild(createBtn);
+  const units = Array.isArray(editingAssignment.units)
+    ? editingAssignment.units
+    : [];
+
+  if (typeSelect.value === "unit") {
+    const first = units.length ? units[0] : null;
+    if (first != null) {
+      const radio = unitOptionsEl.querySelector(
+        `input[name='unit-radio'][value='${first}']`
+      );
+      if (radio) radio.checked = true;
+    }
+  } else {
+    units.forEach((u) => {
+      const cb = unitOptionsEl.querySelector(
+        `input[type='checkbox'][value='${u}']`
+      );
+      if (cb) cb.checked = true;
+    });
+  }
+
+  // Custom question set prefill
+  currentCustomQuestionIds = Array.isArray(editingAssignment.customQuestionIds)
+    ? editingAssignment.customQuestionIds.slice()
+    : [];
+  TeacherDraftQuestionSet.set(currentCustomQuestionIds);
+  updateCustomLabel();
+
+  // Ensure type-dependent UI shows the right controls
+  typeSelect.dispatchEvent(new Event("change"));
+
+  // Lock settings once started
+  if (isLocked) {
+    typeSelect.disabled = true;
+    countInput.disabled = true;
+    timeSelect.disabled = true;
+    multipleAttemptsInput.disabled = true;
+    randomizeInput.disabled = true;
+
+    unitOptionsEl.querySelectorAll("input").forEach((i) => (i.disabled = true));
+    if (pickerBtn) pickerBtn.disabled = true;
+  }
+}
+       // Create / Save assignment button
+const saveBtn = createEl(
+  "button",
+  "mt-3 inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+  [isEditing ? "Save changes" : "Create assignment"]
+);
+saveBtn.type = "button";
+
+saveBtn.addEventListener("click", async () => {
+  if (!classes.length) {
+    Toast.show("Create a class first.", "error");
+    return;
+  }
+
+  const title = (titleInput.value || "").trim() || "Assignment";
+  const dueAt =
+    dueInput.value && dueInput.value.length
+      ? new Date(dueInput.value).toISOString()
+      : null;
+
+  const showAnswers = !!showAnswersInput.checked;
+  const revealAnswersAfterDue =
+    showAnswers && !!hideAnswersUntilDueInput.checked;
+
+  // ✅ If editing AND locked (already started), only allow safe fields
+  if (isEditing && isLocked) {
+    try {
+      await DataManager.updateAssignment(editingAssignment.id, {
+        title,
+        dueAt,
+        showAnswers,
+        revealAnswersAfterDue,
+      });
+      Toast.show("Assignment updated.", "success");
+      TeacherAssignmentEditState.clear();
+      TeacherDraftQuestionSet.clear();
+      renderTeacherAssignments();
+    } catch (e) {
+      console.error("Update assignment error", e);
+      Toast.show(e.message || "Error updating assignment.", "error");
+    }
+    return;
+  }
+
+  const type = typeSelect.value;
+  const questionCountNumber = Number(countInput.value || 10);
+  const timeLimitMinutes = timeSelect.value === "" ? null : Number(timeSelect.value || 0);
+
+  function collectSelectedUnits() {
+    const t = typeSelect.value;
+    if (t === "unit") {
+      const checked = unitOptionsEl.querySelector("input[name='unit-radio']:checked");
+      return checked ? [Number(checked.value)] : [];
+    }
+    if (t === "mixed" || t === "cumulative") {
+      return Array.from(
+        unitOptionsEl.querySelectorAll("input[type='checkbox']:checked")
+      ).map((cb) => Number(cb.value));
+    }
+    if (t === "all") {
+      return UNITS_META.map((u) => u.value);
+    }
+    return [];
+  }
+
+  const units = collectSelectedUnits();
+
+  if ((type === "unit" || type === "mixed" || type === "cumulative") && !units.length) {
+    Toast.show("Select at least one unit.", "error");
+    return;
+  }
+  if (type === "custom" && !currentCustomQuestionIds.length) {
+    Toast.show("Pick at least one question for the custom set.", "error");
+    return;
+  }
+
+  const payload = {
+    title,
+    type,
+    classId: classSelect.value,
+    units,
+    questionCount: type === "custom" ? currentCustomQuestionIds.length : questionCountNumber,
+    timeLimitMinutes,
+
+    allowMultipleAttempts: multipleAttemptsInput.checked,
+    showAnswers,
+    revealAnswersAfterDue,
+    randomizeQuestions: randomizeInput.checked,
+
+    dueAt,
+    customQuestionIds: currentCustomQuestionIds.slice(),
+  };
+
+  try {
+    if (isEditing) {
+      await DataManager.updateAssignment(editingAssignment.id, payload);
+      Toast.show("Assignment updated.", "success");
+      TeacherAssignmentEditState.clear();
+      TeacherDraftQuestionSet.clear();
+      renderTeacherAssignments();
+    } else {
+      await DataManager.createAssignment({
+        ...payload,
+        teacherId,
+      });
+      Toast.show("Assignment created.", "success");
+      TeacherDraftQuestionSet.clear();
+      renderTeacherAssignments();
+    }
+  } catch (e) {
+    console.error(isEditing ? "Update assignment error" : "Create assignment error", e);
+    Toast.show(
+      e.message || (isEditing ? "Error updating assignment." : "Error creating assignment."),
+      "error"
+    );
+  }
+});
+
+createCard.appendChild(saveBtn);
         wrapper.appendChild(createCard);
 
         // Recent assignments
@@ -6797,29 +7042,17 @@ const editBtn = createEl(
   "px-2 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500",
   ["Edit"]
 );
+
 editBtn.addEventListener("click", async () => {
-  const currentTitle = a.title || "";
-  const updatedTitle = window.prompt(
-    "Edit assignment title:",
-    currentTitle
-  );
-  if (updatedTitle == null || updatedTitle === currentTitle) return;
-  try {
-    await DataManager.updateAssignment(a.id, {
-      title: updatedTitle,
-    });
-    a.title = updatedTitle;
-    const titleEl = left.querySelector(
-      "p.text-xs.font-semibold.text-gray-900"
-    );
-    if (titleEl) {
-      titleEl.textContent = updatedTitle || "Assignment";
-    }
-    Toast.show("Assignment updated.", "success");
-  } catch (err) {
-    console.error("Update assignment error", err);
-    Toast.show("Could not update assignment.", "error");
-  }
+  // Preload custom picks (so the picker is pre-checked in edit mode)
+  const ids = Array.isArray(a.customQuestionIds) ? a.customQuestionIds : [];
+  TeacherDraftQuestionSet.set(ids);
+
+  // Put builder into full edit mode
+  await beginEditAssignment(a.id);
+
+  // Optional: auto-open the custom picker when editing a custom assignment
+  // if (a.type === "custom") TeacherDraftQuestionSet.openPickerOnNextRender = true;
 });
 
 const deleteBtn = createEl(
@@ -7778,77 +8011,200 @@ submissions.forEach((s) => {
         }
         wrapper.appendChild(unitCard);
 
-       // Most challenging questions (robust)
+      // Most challenging questions (selectable + push to Custom set)
 const questionMap = {};
 submissions.forEach((s) => {
-  (s?.questionResults || []).forEach((qr) => {
-    const id = qr?.questionId;
-    if (!id) return;
+  (s.questionResults || []).forEach((qr) => {
+    const qid = qr.questionId || qr.id || qr.qid;
+    if (!qid) return;
 
-    if (!questionMap[id]) {
-      questionMap[id] = {
-        questionId: id,
-        text: typeof qr?.question === "string" ? qr.question : "(Question text unavailable)",
-        unit: Number.isFinite(Number(qr?.unit)) ? Number(qr.unit) : null,
-        attempts: 0,
+    if (!questionMap[qid]) {
+      questionMap[qid] = {
+        id: qid,
+        question: qr.question || "",
+        unit: qr.unit || null,
+
+        // capture choices for hover preview (when available)
+        options: Array.isArray(qr.options) ? qr.options : [],
+        correctIndex: typeof qr.correctIndex === "number" ? qr.correctIndex : null,
+        explanation: qr.explanation || "",
+        distractorNotes:
+          qr.distractorNotes && typeof qr.distractorNotes === "object"
+            ? qr.distractorNotes
+            : null,
+
         correct: 0,
+        total: 0,
       };
     }
 
-    const entry = questionMap[id];
-    entry.attempts += 1;
-    if (!!qr?.isCorrect) entry.correct += 1;
+    questionMap[qid].total += 1;
+    if (qr.isCorrect) questionMap[qid].correct += 1;
   });
 });
 
-        const hardest = Object.values(questionMap)
-          .filter((q) => q.attempts >= 3)
-          .map((q) => ({
-            ...q,
-            accuracy: q.attempts > 0 ? q.correct / q.attempts : 0,
-          }))
-          .sort((a, b) => a.accuracy - b.accuracy)
-          .slice(0, 5);
+const hardest = Object.values(questionMap)
+  .filter((q) => q.total >= 3) // avoid noise from tiny samples
+  .sort((a, b) => a.correct / a.total - b.correct / b.total)
+  .slice(0, 10);
 
-        const hardestCard = createEl(
-          "div",
-          "bg-white border border-gray-200 rounded-xl p-4 space-y-2 shadow-sm",
-          []
-        );
-        hardestCard.appendChild(
-          createEl("h3", "text-xs font-semibold text-gray-800 mb-1", [
-            "Most challenging questions",
-          ])
-        );
-        if (!hardest.length) {
-          hardestCard.appendChild(
-            createEl("p", "text-sm text-gray-500", [
-              "Once students have seen questions multiple times, the lowest-performing questions will appear here.",
-            ])
-          );
-        } else {
-          hardest.forEach((q) => {
-            const row = createEl(
-              "div",
-              "border border-gray-200 rounded-lg px-3 py-2 text-sm space-y-1",
-              []
-            );
-            row.appendChild(
-              createEl("p", "text-sm text-gray-800", [
-                q.text.length > 160 ? q.text.slice(0, 157) + "…" : q.text,
-              ])
-            );
-            row.appendChild(
-              createEl("p", "text-xs text-gray-500", [
-                `Unit ${q.unit || "?"} · ${q.correct}/${q.attempts} correct · ${Math.round(
-                  (q.accuracy || 0) * 100
-                )}% accuracy`,
-              ])
-            );
-            hardestCard.appendChild(row);
-          });
-        }
-        wrapper.appendChild(hardestCard);
+const hardestCard = createEl(
+  "div",
+  "bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2",
+  []
+);
+
+const hardestHeader = createEl(
+  "div",
+  "flex items-start justify-between gap-2",
+  []
+);
+hardestHeader.appendChild(
+  createEl("h3", "text-xs font-semibold text-gray-800", [
+    "Most challenging questions",
+  ])
+);
+
+// ---- actions + selection state ----
+const selected = new Set();
+let hardestListEl = null;
+
+const actions = createEl("div", "flex flex-wrap items-center gap-2", []);
+const selectedLabel = createEl("span", "text-xs text-gray-500", ["0 selected"]);
+
+const addBtn = createEl(
+  "button",
+  "px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed",
+  ["Add to Custom set"]
+);
+addBtn.type = "button";
+addBtn.disabled = true;
+
+const buildBtn = createEl(
+  "button",
+  "px-2.5 py-1 rounded-lg border border-gray-300 text-xs hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed",
+  ["Build assignment"]
+);
+buildBtn.type = "button";
+buildBtn.disabled = true;
+
+const clearSelBtn = createEl(
+  "button",
+  "px-2.5 py-1 rounded-lg border border-gray-300 text-xs hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed",
+  ["Clear"]
+);
+clearSelBtn.type = "button";
+clearSelBtn.disabled = true;
+
+function syncSelectedUI() {
+  const n = selected.size;
+  selectedLabel.textContent = `${n} selected`;
+  addBtn.disabled = n === 0;
+  buildBtn.disabled = n === 0;
+  clearSelBtn.disabled = n === 0;
+}
+
+addBtn.addEventListener("click", () => {
+  const ids = Array.from(selected);
+  TeacherDraftQuestionSet.addMany(ids);
+  Toast.show(
+    `Added ${ids.length} question${ids.length === 1 ? "" : "s"} to the Custom question set.`,
+    "success"
+  );
+});
+
+buildBtn.addEventListener("click", () => {
+  const ids = Array.from(selected);
+  TeacherDraftQuestionSet.addMany(ids);
+
+  // jump to Assignments and auto-open picker
+  TeacherDraftQuestionSet.openPickerOnNextRender = true;
+  AppState.currentTab = "assignments";
+  renderTabs();
+  renderTeacherAssignments();
+
+  Toast.show("Custom question set prefilled. Review/adjust your picks.", "success");
+});
+
+clearSelBtn.addEventListener("click", () => {
+  selected.clear();
+  if (hardestListEl) {
+    hardestListEl.querySelectorAll("input[type='checkbox']").forEach((cb) => {
+      cb.checked = false;
+    });
+  }
+  syncSelectedUI();
+});
+
+actions.appendChild(addBtn);
+actions.appendChild(buildBtn);
+actions.appendChild(clearSelBtn);
+actions.appendChild(selectedLabel);
+
+hardestHeader.appendChild(actions);
+hardestCard.appendChild(hardestHeader);
+
+// ---- list ----
+hardestListEl = createEl("div", "space-y-2", []);
+
+if (!hardest.length) {
+  hardestListEl.appendChild(
+    createEl("p", "text-xs text-gray-500", [
+      "Not enough data yet — once students have a few submissions, this list will populate.",
+    ])
+  );
+} else {
+  hardest.forEach((q) => {
+    const acc = q.total ? q.correct / q.total : 0;
+
+    const row = createEl(
+      "label",
+      "flex items-start gap-2 p-2 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer",
+      []
+    );
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "mt-1 h-3 w-3 text-blue-600";
+
+    // optional: pre-check if already in the draft set
+    if ((TeacherDraftQuestionSet.ids || []).includes(q.id)) {
+      cb.checked = true;
+      selected.add(q.id);
+    }
+
+    cb.addEventListener("change", () => {
+      if (cb.checked) selected.add(q.id);
+      else selected.delete(q.id);
+      syncSelectedUI();
+    });
+
+    row.appendChild(cb);
+
+    const meta = createEl("div", "flex-1 min-w-0", []);
+    meta.appendChild(
+      createEl("p", "text-sm text-gray-900 truncate", [
+        q.question || "Untitled question",
+      ])
+    );
+    meta.appendChild(
+      createEl("p", "text-xs text-gray-500 mt-0.5", [
+        `Unit ${q.unit || "?"} · Accuracy ${Math.round(acc * 100)}% · Attempts ${q.total}`,
+      ])
+    );
+    row.appendChild(meta);
+
+    // hover preview (will show choices when q.options exists)
+    attachSmartHoverPreview(row, q);
+
+    hardestListEl.appendChild(row);
+  });
+}
+
+hardestCard.appendChild(hardestListEl);
+wrapper.appendChild(hardestCard);
+
+syncSelectedUI();
 
         // Score distribution
         const distCard = createEl(
