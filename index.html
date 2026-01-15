@@ -610,16 +610,75 @@ function buildQuestionPreviewEl(q) {
   wrap.style.width = "92vw";
   wrap.style.maxWidth = "34rem";
 
+  // Only show answer key for teachers (prevents leaking to students)
+  const showCorrect =
+    typeof AppState !== "undefined" && AppState && AppState.role === "teacher";
+
+  // Try to determine correct index across possible schemas
+  const getCorrectIndex = (qq) => {
+    if (!qq) return null;
+
+    // Most common in your app
+    if (typeof qq.correctIndex === "number" && Number.isFinite(qq.correctIndex)) {
+      return qq.correctIndex;
+    }
+
+    // Sometimes stored as letter ("A"/"B"/"C"/"D")
+    const letterLike =
+      qq.correctAnswer ?? qq.correctLetter ?? qq.answerKey ?? qq.answer;
+    if (typeof letterLike === "string") {
+      const s = letterLike.trim().toUpperCase();
+      const code = s.charCodeAt(0);
+      if (code >= 65 && code <= 90) return code - 65; // A->0
+      const n = Number(s);
+      if (Number.isFinite(n)) return n;
+    }
+
+    if (typeof letterLike === "number" && Number.isFinite(letterLike)) {
+      return letterLike;
+    }
+
+    return null;
+  };
+
+  const correctIndex = showCorrect ? getCorrectIndex(q) : null;
+
   // Content
-  wrap.appendChild(createEl("p", "font-medium mb-2", [q.question || "(no text)"]));
+  wrap.appendChild(
+    createEl("p", "font-medium mb-2", [q.question || "(no text)"])
+  );
 
   const opts = Array.isArray(q.options) ? q.options : [];
+
+  // Small “Correct: B” line (teacher-only)
+  if (
+    showCorrect &&
+    typeof correctIndex === "number" &&
+    correctIndex >= 0 &&
+    correctIndex < opts.length
+  ) {
+    const letter = String.fromCharCode(65 + correctIndex);
+    wrap.appendChild(
+      createEl("div", "mb-2 text-xs font-medium text-green-700", [
+        `Correct: ${letter}`,
+      ])
+    );
+  }
+
   if (opts.length) {
     const ul = createEl("ul", "space-y-1 text-gray-800", []);
     opts.forEach((opt, i) => {
       const letter = String.fromCharCode(65 + i);
+      const isCorrect = showCorrect && correctIndex === i;
+
+      const liClass = isCorrect
+        ? "px-2 py-1 rounded border border-green-200 bg-green-50 text-green-900 font-semibold"
+        : "px-2 py-1 rounded";
+
       ul.appendChild(
-        createEl("li", "", [`${letter}. ${opt == null ? "" : String(opt)}`])
+        createEl("li", liClass, [
+          `${letter}. ${opt == null ? "" : String(opt)}`,
+        ])
       );
     });
     wrap.appendChild(ul);
