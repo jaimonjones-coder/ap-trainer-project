@@ -641,7 +641,7 @@ function buildQuestionPreviewEl(q) {
     return null;
   };
 
-  const correctIndex = showCorrect ? getCorrectIndex(q) : null;
+  const correctIndex = showCorrect ? getCorrectIndexFromQuestion(q) : null;
 
   // Content
   wrap.appendChild(
@@ -813,7 +813,41 @@ function normalizeDifficulty(raw) {
   // Unknown label => default
   return "standard";
 }
+// Helper: robustly get the correct option index (0=A, 1=B, 2=C, 3=D)
+function getCorrectIndexFromQuestion(q) {
+  if (!q) return null;
 
+  if (typeof q.correctIndex === "number") return q.correctIndex;
+
+  const raw =
+    q.correctAnswer ??
+    q.correct ??
+    q.answerKey ??
+    q.answer ??
+    q.correctOption ??
+    null;
+
+  if (raw == null) return null;
+
+  const s = String(raw).trim().toUpperCase();
+
+  // Letter form: "A"/"B"/"C"/"D"
+  if (/^[A-D]$/.test(s)) return s.charCodeAt(0) - 65;
+
+  // Number form: "1"/"2"/"3"/"4" => 0..3
+  const n = parseInt(s, 10);
+  if (!Number.isNaN(n) && n >= 1 && n <= 4) return n - 1;
+
+  // If they stored the exact option text, try to match it
+  if (Array.isArray(q.options)) {
+    const idx = q.options.findIndex(
+      (opt) => String(opt).trim() === String(raw).trim()
+    );
+    if (idx >= 0) return idx;
+  }
+
+  return null;
+}
 // Pretty label for UI
 function formatDifficultyLabel(raw) {
   const d = normalizeDifficulty(raw);
@@ -2710,6 +2744,43 @@ unitLabel + stdLabel + skillLabel + diffLabel,
           "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
           ["Edit explanation"]
         );
+        const correctBtn = createEl(
+  "button",
+  "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
+  ["Correct answer"]
+);
+correctBtn.type = "button";
+correctBtn.addEventListener("click", async () => {
+  const currentIdx = getCorrectIndexFromQuestion(q);
+  const currentLetter =
+    typeof currentIdx === "number" && currentIdx >= 0
+      ? String.fromCharCode(65 + currentIdx)
+      : "";
+
+  const updated = window.prompt("Set correct answer (A-D or 1-4):", currentLetter);
+  if (updated == null) return;
+
+  const raw = updated.trim().toUpperCase();
+  let idx = ["A", "B", "C", "D"].indexOf(raw);
+  if (idx === -1) {
+    const n = Number(raw);
+    if (!isNaN(n)) idx = n - 1;
+  }
+
+  if (!Array.isArray(q.options) || idx < 0 || idx >= q.options.length) {
+    Toast.show("Please enter A–D (or 1–4).", "error");
+    return;
+  }
+
+  try {
+    await DataManager.updateQuestion(q.id, { correctIndex: idx });
+    q.correctIndex = idx; // update local copy
+    Toast.show("Correct answer updated.", "success");
+  } catch (err) {
+    console.error("Update correct answer error", err);
+    Toast.show("Could not update correct answer.", "error");
+  }
+});
         const deleteBtn = createEl(
           "button",
           "px-2 py-1 text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50",
@@ -2717,8 +2788,10 @@ unitLabel + stdLabel + skillLabel + diffLabel,
         );
 
         btnRow.appendChild(editBtn);
-        btnRow.appendChild(explainBtn);
-        btnRow.appendChild(deleteBtn);
+btnRow.appendChild(explainBtn);
+btnRow.appendChild(correctBtn);
+btnRow.appendChild(deleteBtn);
+
 
         editBtn.addEventListener("click", async () => {
           const current = q.question || "";
@@ -6026,7 +6099,9 @@ lines.forEach((line, idx) => {
 const difficulty = normalizeDifficulty(difficultyRaw);
 
   // Correct answer: can be A/B/C/D or 1/2/3/4
-  const cRaw = (correctRaw || "").toString().trim().toUpperCase();
+  let cRaw = (correctRaw || "").toString().trim().toUpperCase();
+cRaw = cRaw.replace(/[^A-D0-4]/g, "");
+if (cRaw.length > 1) cRaw = cRaw[0];
   let correctIndex = ["A", "B", "C", "D"].indexOf(cRaw);
   if (correctIndex === -1) {
     const n = Number(cRaw);
