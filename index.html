@@ -3645,23 +3645,24 @@ let combined = [...srQs, ...weakQuestions];
       let quizTimerInterval = null;
 
       function startQuizSession({ mode, assignment, questions, timeLimitMinutes }) {
-       AppState.practiceResults = null;
-        AppState.currentQuiz = {
-          mode,
-          assignment: assignment || null,
-          questions,
-          index: 0,
-          startedAt: Date.now(),
-          answers: [],
-          timeLimitMinutes:
-            timeLimitMinutes != null
-              ? timeLimitMinutes
-              : assignment?.timeLimitMinutes || null,
-        };
-        AppState.currentTab = "practice";
-        renderTabs();
-        renderCurrentTab();
-      }
+  AppState.practiceResults = null;
+  AppState.currentQuiz = {
+    mode,
+    assignment: assignment || null,
+    questions,
+    index: 0,
+    startedAt: Date.now(),
+    answers: [],
+    isSubmitting: false, // ✅ ADD THIS
+    timeLimitMinutes:
+      timeLimitMinutes != null
+        ? timeLimitMinutes
+        : assignment?.timeLimitMinutes || null,
+  };
+  AppState.currentTab = "practice";
+  renderTabs();
+  renderCurrentTab();
+}
 
 
 
@@ -3838,15 +3839,37 @@ function renderQuiz() {
     ["Finish"]
   );
   finishBtn.setAttribute("aria-label", "Finish quiz and view results");
-  finishBtn.addEventListener("click", () => {
-    if (
-      confirm(
-        "Finish this quiz and view results? You won't be able to change answers."
-      )
-    ) {
-      finishQuiz(false);
+  finishBtn.addEventListener("click", async () => {
+  const quiz = AppState.currentQuiz;
+  if (!quiz) return;
+
+  // prevents double-click spam
+  if (quiz.isSubmitting) return;
+
+  const ok = confirm(
+    "Finish this quiz and view results? You won't be able to change answers."
+  );
+  if (!ok) return;
+
+  // disable immediately (IMPORTANT: do NOT set quiz.isSubmitting here)
+  finishBtn.disabled = true;
+  const originalText = finishBtn.textContent;
+  finishBtn.textContent = "Submitting…";
+
+  try {
+    await finishQuiz(false);
+  } catch (e) {
+    console.error("finishQuiz error", e);
+    Toast.show(e.message || "Error submitting. Try again.", "error");
+
+    // if we’re still on the quiz screen, re-enable
+    if (AppState.currentQuiz) {
+      quiz.isSubmitting = false; // in case finishQuiz set it before failing
+      finishBtn.disabled = false;
+      finishBtn.textContent = originalText;
     }
-  });
+  }
+});
 
   controls.appendChild(prevBtn);
   controls.appendChild(nextBtn);
@@ -4003,6 +4026,9 @@ if (results.canShowAnswers === false) {
 async function finishQuiz(autoFromTimer) {
         const quiz = AppState.currentQuiz;
         if (!quiz) return;
+  // ✅ Prevent double-submits (button spam, timer + click, lag, etc.)
+if (quiz.isSubmitting) return;
+quiz.isSubmitting = true;
         if (quizTimerInterval) {
           clearInterval(quizTimerInterval);
           quizTimerInterval = null;
