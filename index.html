@@ -1,15 +1,25 @@
 
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Eduvate · AP Psychology Trainer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      * {
-        box-sizing: border-box;
-      }
+ <head>
+  <meta charset="UTF-8" />
+  <title>Eduvate · AP Psychology Trainer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    /* Prevent copy/paste via text selection (assignment mode) */
+    .no-copy, .no-copy * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none; /* iOS long-press menu */
+    }
+
+    * {
+      box-sizing: border-box;
+    }
       body {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
           "SF Pro Display", "Segoe UI", sans-serif;
@@ -3766,7 +3776,17 @@ function renderQuiz() {
     "bg-white border border-gray-200 rounded-xl p-4 md:p-5 shadow-sm space-y-3",
     []
   );
+// Anti-copy (only for assignments). Not foolproof, but blocks casual copy/paste.
+if (quiz.mode === "assignment") {
+  qCard.classList.add("no-copy");
 
+  // Block right-click menu on the question card
+  qCard.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  // Block copy/cut events if they somehow trigger
+  qCard.addEventListener("copy", (e) => e.preventDefault());
+  qCard.addEventListener("cut", (e) => e.preventDefault());
+}
   qCard.appendChild(
     createElHTML(
       "p",
