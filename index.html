@@ -1606,7 +1606,103 @@ async listAssignmentsForTeacher(teacherId) {
           const snap = await ref.get();
           return { id: ref.id, ...snap.data() };
         },
+        /* === RESUME_ATTEMPTS_FIRESTORE: DATA MANAGER (SEARCH ME) === */
+        _attemptDocIdForAssignment(userId, assignmentId) {
+          return `${userId}__${assignmentId}`;
+        },
 
+        async getAttempt(attemptId) {
+          if (!attemptId) return null;
+          const snap = await db.collection("attempts").doc(attemptId).get();
+          return snap.exists ? { id: snap.id, ...snap.data() } : null;
+        },
+
+        async listInProgressAttemptsForStudent(userId) {
+  if (!userId) return [];
+
+  /* === RESUME_ATTEMPTS_FIRESTORE: NO COMPOSITE INDEX (SEARCH ME) ===
+     Avoids needing a Firestore composite index by querying only userId.
+  === */
+  const snap = await db
+    .collection("attempts")
+    .where("userId", "==", userId)
+    .get();
+
+  const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return (all || []).filter((at) => at && at.status === "in_progress");
+},
+        async createOrResetInProgressAttempt({ userId, assignment, questions, timeLimitMinutes }) {
+          if (!userId || !assignment?.id) {
+            throw new Error("Missing userId or assignment id");
+          }
+
+          const qIds = (questions || [])
+            .map((q) => q && q.id)
+            .filter(Boolean);
+
+          if (!qIds.length) {
+            throw new Error("Questions missing ids; cannot create attempt.");
+          }
+
+          const attemptId = this._attemptDocIdForAssignment(userId, assignment.id);
+          const ref = db.collection("attempts").doc(attemptId);
+
+          const nowMs = Date.now();
+          const payload = {
+            userId,
+            assignmentId: assignment.id,
+            classId: assignment.classId || null,
+            mode: "assignment",
+            status: "in_progress",
+            questionOrderIds: qIds,
+            answers: Array(qIds.length).fill(null),
+            currentIndex: 0,
+            startedAtMs: nowMs,
+            timeLimitMinutes: timeLimitMinutes ?? assignment.timeLimitMinutes ?? null,
+            lastSavedAtMs: nowMs,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+
+          // overwrite any previous attempt doc (so a new retake starts clean)
+          await ref.set(payload);
+          return { id: attemptId, ...payload };
+        },
+
+        async updateAttemptProgress(attemptId, { answers, currentIndex }) {
+          if (!attemptId) return;
+          const ref = db.collection("attempts").doc(attemptId);
+
+          const safeAnswers = Array.isArray(answers) ? answers : [];
+          const idx = Number.isFinite(currentIndex) ? currentIndex : 0;
+
+          await ref.set(
+            {
+              answers: safeAnswers,
+              currentIndex: idx,
+              status: "in_progress",
+              lastSavedAtMs: Date.now(),
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        },
+
+        async completeAttempt(attemptId, submissionId) {
+          if (!attemptId) return;
+          const ref = db.collection("attempts").doc(attemptId);
+
+          await ref.set(
+            {
+              status: "submitted",
+              submissionId: submissionId || null,
+              completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        },
+        /* === /RESUME_ATTEMPTS_FIRESTORE: DATA MANAGER === */
         async listSubmissionsForStudent(studentId) {
           const snap = await db
             .collection("submissions")
@@ -3653,26 +3749,66 @@ let combined = [...srQs, ...weakQuestions];
       }
 
       let quizTimerInterval = null;
+      /* === RESUME_ATTEMPTS_FIRESTORE: SAVE PROGRESS HELPERS (SEARCH ME) === */
+      let _attemptSaveDebounceTimer = null;
 
-      function startQuizSession({ mode, assignment, questions, timeLimitMinutes }) {
-  AppState.practiceResults = null;
-  AppState.currentQuiz = {
-    mode,
-    assignment: assignment || null,
-    questions,
-    index: 0,
-    startedAt: Date.now(),
-    answers: [],
-    isSubmitting: false, // ✅ ADD THIS
-    timeLimitMinutes:
-      timeLimitMinutes != null
-        ? timeLimitMinutes
-        : assignment?.timeLimitMinutes || null,
-  };
-  AppState.currentTab = "practice";
-  renderTabs();
-  renderCurrentTab();
-}
+      async function saveCurrentAttemptProgress(reason) {
+        const quiz = AppState.currentQuiz;
+        if (!quiz || quiz.mode !== "assignment" || !quiz.attemptId) return;
+
+        try {
+          await DataManager.updateAttemptProgress(quiz.attemptId, {
+            answers: quiz.answers,
+            currentIndex: quiz.index,
+          });
+        } catch (e) {
+          console.error("Attempt progress save failed (" + reason + ")", e);
+        }
+      }
+
+      function saveCurrentAttemptProgressDebounced(reason) {
+        const quiz = AppState.currentQuiz;
+        if (!quiz || quiz.mode !== "assignment" || !quiz.attemptId) return;
+
+        if (_attemptSaveDebounceTimer) clearTimeout(_attemptSaveDebounceTimer);
+        _attemptSaveDebounceTimer = setTimeout(() => {
+          saveCurrentAttemptProgress(reason);
+        }, 400);
+      }
+      /* === /RESUME_ATTEMPTS_FIRESTORE: SAVE PROGRESS HELPERS === */
+            function startQuizSession({ mode, assignment, questions, timeLimitMinutes, attempt }) {
+        AppState.practiceResults = null;
+
+        const safeQuestions = Array.isArray(questions) ? questions : [];
+        const maxIndex = Math.max(0, safeQuestions.length - 1);
+        const rawIndex = Number(attempt?.currentIndex ?? 0);
+        const initialIndex = Math.max(0, Math.min(isNaN(rawIndex) ? 0 : rawIndex, maxIndex));
+
+        AppState.currentQuiz = {
+          mode,
+          assignment: assignment || null,
+          questions: safeQuestions,
+          index: initialIndex,
+          startedAt: Number(attempt?.startedAtMs) || Date.now(),
+          answers: Array.isArray(attempt?.answers) ? attempt.answers : [],
+          isSubmitting: false,
+          attemptId: attempt?.id || null,
+          timeLimitMinutes:
+            timeLimitMinutes != null
+              ? timeLimitMinutes
+              : assignment?.timeLimitMinutes || null,
+        };
+
+        AppState.currentTab = "practice";
+        renderTabs();
+        renderCurrentTab();
+
+        // Touch the attempt so "last saved" updates on resume.
+        if (AppState.currentQuiz.mode === "assignment" && AppState.currentQuiz.attemptId) {
+          saveCurrentAttemptProgressDebounced("start/resume");
+        }
+      }
+  
 
 
 
@@ -3809,8 +3945,10 @@ if (quiz.mode === "assignment") {
 
     btn.innerHTML = opt || "";
 
-    btn.addEventListener("click", () => {
+        btn.addEventListener("click", () => {
       quiz.answers[quiz.index] = idx;
+      // ✅ Cross-device resume: save progress to Firestore on every answer
+      saveCurrentAttemptProgress("answer");
       renderQuiz();
     });
     list.appendChild(btn);
@@ -3834,9 +3972,10 @@ if (quiz.mode === "assignment") {
   prevBtn.disabled = quiz.index === 0;
   prevBtn.addEventListener("click", () => {
     if (quiz.index > 0) {
-      quiz.index--;
-      renderQuiz();
-    }
+      // Previous
+quiz.index--;
+saveCurrentAttemptProgressDebounced("prev");
+renderQuiz();    }
   });
 
   const nextBtn = createEl(
@@ -3848,9 +3987,10 @@ if (quiz.mode === "assignment") {
   nextBtn.disabled = quiz.index === quiz.questions.length - 1;
   nextBtn.addEventListener("click", () => {
     if (quiz.index < quiz.questions.length - 1) {
-      quiz.index++;
-      renderQuiz();
-    }
+      // Next
+quiz.index++;
+saveCurrentAttemptProgressDebounced("next");
+renderQuiz();    }
   });
 
   const finishBtn = createEl(
@@ -4098,28 +4238,38 @@ quiz.isSubmitting = true;
         const total = questions.length;
         const scorePercent = total > 0 ? (correctCount / total) * 100 : 0;
 
-        // Persist submission
-        if (AppState.user) {
-          try {
-            await DataManager.saveSubmission({
-              userId: AppState.user.uid,
-              assignmentId: quiz.assignment?.id || null,
-              mode: quiz.mode,
-              isPractice:
-                quiz.assignment?.isPractice || quiz.mode !== "assignment",
-              totalQuestions: total,
-              correctCount,
-              scorePercent,
-              perUnit,
-              questionResults,
-              startedAt: new Date(quiz.startedAt).toISOString(),
-              completedAt: new Date().toISOString(),
-            });
-          } catch (e) {
-            console.error("Error saving submission", e);
-          }
-        }
+       // Persist submission
+if (AppState.user) {
+  try {
+    /* === RESUME_ATTEMPTS_FIRESTORE: COMPLETE ON FINISH (SEARCH ME) === */
 
+    const savedSubmission = await DataManager.saveSubmission({
+      userId: AppState.user.uid,
+      assignmentId: quiz.assignment?.id || null,
+      mode: quiz.mode,
+      isPractice: quiz.assignment?.isPractice || quiz.mode !== "assignment",
+      totalQuestions: total,
+      correctCount,
+      scorePercent,
+      perUnit,
+      questionResults,
+      startedAt: new Date(quiz.startedAt).toISOString(),
+      completedAt: new Date().toISOString(),
+    });
+
+    // ✅ Cross-device resume: mark the in-progress attempt as submitted
+    if (quiz.mode === "assignment" && quiz.attemptId) {
+      await DataManager.completeAttempt(
+        quiz.attemptId,
+        savedSubmission?.id || null
+      );
+    }
+
+    /* === /RESUME_ATTEMPTS_FIRESTORE: COMPLETE ON FINISH === */
+  } catch (e) {
+    console.error("Error saving submission", e);
+  }
+}
         const vis =
   quiz.mode === "assignment"
     ? computeAnswerVisibility(quiz.assignment)
@@ -4499,40 +4649,96 @@ if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
       }
 
       async function renderStudentAssignments() {
-        const content = $("tab-content");
-        content.innerHTML =
-          "<p class='text-sm text-gray-500'>Loading assignments…</p>";
-        const userId = AppState.user.uid;
+  const content = $("tab-content");
+  content.innerHTML =
+    "<p class='text-sm text-gray-500'>Loading assignments…</p>";
+  const userId = AppState.user.uid;
 
-        let assignments = [];
-        let submissions = [];
-        try {
-          const [a, s] = await Promise.all([
-  (LiveData.active && LiveData.ready.assignments)
-    ? Promise.resolve(LiveData.assignments)
-    : DataManager.listAssignmentsForStudent(userId),
+  /* === RESUME_ATTEMPTS_FIRESTORE: SAFE LOAD (SEARCH ME) === */
+  let assignments = [];
+  let submissions = [];
+  let attempts = [];
+  let attemptsLoadError = null;
 
-  (LiveData.active && LiveData.ready.submissions)
-    ? Promise.resolve(LiveData.submissions)
-    : DataManager.listSubmissionsForStudent(userId),
-]);
+  // 1) Load assignments + submissions FIRST (so attempts failure won't break page)
+  try {
+    const [a, s] = await Promise.all([
+      (LiveData.active && LiveData.ready.assignments)
+        ? Promise.resolve(LiveData.assignments)
+        : DataManager.listAssignmentsForStudent(userId),
 
-assignments = a || [];
-submissions = s || [];
-        } catch (e) {
-          console.error("Student assignments error", e);
-          Toast.show(
-            "Assignments could not load (check Firestore rules).",
-            "error"
-          );
-        }
+      (LiveData.active && LiveData.ready.submissions)
+        ? Promise.resolve(LiveData.submissions)
+        : DataManager.listSubmissionsForStudent(userId),
+    ]);
 
-        const wrapper = createEl("div", "space-y-3", []);
-        wrapper.appendChild(
-          createEl("h2", "text-sm font-semibold text-gray-900", [
-            "Assignments & practice",
-          ])
-        );
+    assignments = a || [];
+    submissions = s || [];
+  } catch (e) {
+    // Show real error ON SCREEN (since you don't have DevTools)
+    const errCode = e?.code ? String(e.code) : "unknown";
+    const errMsg = e?.message ? String(e.message) : String(e);
+
+    content.innerHTML = "";
+    content.appendChild(
+      createEl("div", "p-3 bg-rose-50 border border-rose-200 rounded-lg", [
+        createEl("p", "text-sm font-semibold text-rose-800", [
+          "Assignments could not load.",
+        ]),
+        createEl("pre", "text-[11px] text-rose-700 mt-2 whitespace-pre-wrap", [
+          `Error: ${errCode}\n${errMsg}`,
+        ]),
+      ])
+    );
+
+    Toast.show("Assignments could not load.", "error");
+    return; // stop rendering the rest
+  }
+
+  // 2) Load attempts separately (resume can fail without breaking assignments)
+  try {
+    attempts = await DataManager.listInProgressAttemptsForStudent(userId);
+  } catch (e) {
+    const errCode = e?.code ? String(e.code) : "unknown";
+    const errMsg = e?.message ? String(e.message) : String(e);
+    attemptsLoadError = { code: errCode, message: errMsg };
+    attempts = [];
+  }
+
+  // 3) Map attempts by assignmentId for Resume buttons
+  const attemptsByAssignmentId = {};
+  (attempts || []).forEach((at) => {
+    if (at && at.assignmentId) attemptsByAssignmentId[at.assignmentId] = at;
+  });
+
+  AppState._attemptsByAssignmentId = attemptsByAssignmentId;
+  AppState._attemptsLoadError = attemptsLoadError;
+  /* === /RESUME_ATTEMPTS_FIRESTORE: SAFE LOAD === */
+
+  const wrapper = createEl("div", "space-y-3", []);
+
+  /* === RESUME_ATTEMPTS_FIRESTORE: ATTEMPTS ERROR BANNER (SEARCH ME) === */
+  if (AppState._attemptsLoadError) {
+    wrapper.appendChild(
+      createEl("div", "p-2 bg-amber-50 border border-amber-200 rounded-lg", [
+        createEl("p", "text-xs text-amber-800", [
+          "Resume is temporarily unavailable (attempts could not load).",
+        ]),
+        createEl("pre", "text-[11px] text-amber-800 mt-1 whitespace-pre-wrap", [
+          `Error: ${AppState._attemptsLoadError.code}\n${AppState._attemptsLoadError.message}`,
+        ]),
+      ])
+    );
+  }
+  /* === /RESUME_ATTEMPTS_FIRESTORE: ATTEMPTS ERROR BANNER === */
+
+  wrapper.appendChild(
+    createEl("h2", "text-sm font-semibold text-gray-900", [
+      "Assignments & practice",
+    ])
+  );
+
+  // (the rest of your renderStudentAssignments() continues below...)
 
         if (!assignments.length) {
           wrapper.appendChild(
@@ -4623,14 +4829,29 @@ const pill = createEl(
 );
 statusRow.appendChild(pill);
 left.appendChild(statusRow);
+const right = createEl("div", "flex gap-2 items-center", []);
 
-            const right = createEl("div", "flex gap-2 items-center", []);
-           // ✅ Enforce retake rules
-const hasAttempt = !!lastSub;
-const canRetake = !!a.allowMultipleAttempts; // comes from teacher toggle
-const canStart = !hasAttempt || canRetake;
+/* === RESUME_ATTEMPTS_FIRESTORE: START/RESUME BUTTON (SEARCH ME) === */
+const inProg = AppState._attemptsByAssignmentId?.[a.id] || null;
 
-const startLabel = !hasAttempt ? "Start" : canRetake ? "Retake" : "Completed";
+// Retake rules based on last submitted submission
+const hasSubmission = !!lastSub;
+const canRetake = !!a.allowMultipleAttempts; // teacher toggle
+const canStart = !hasSubmission || canRetake;
+
+// Label: Resume if there's an in-progress attempt; else Start/Retake/Completed
+let startLabel = "Start";
+if (inProg && canStart) {
+  const totalQ = Array.isArray(inProg.questionOrderIds)
+    ? inProg.questionOrderIds.length
+    : 0;
+  const answered = Array.isArray(inProg.answers)
+    ? inProg.answers.filter((x) => x !== null && x !== undefined).length
+    : 0;
+  startLabel = totalQ ? `Resume (${answered}/${totalQ})` : "Resume";
+} else {
+  startLabel = !hasSubmission ? "Start" : canRetake ? "Retake" : "Completed";
+}
 
 const startBtn = createEl(
   "button",
@@ -4642,13 +4863,52 @@ const startBtn = createEl(
 
 startBtn.type = "button";
 startBtn.disabled = !canStart;
+
 startBtn.addEventListener("click", async () => {
-  // Enforce "no retakes"
+  // Enforce "no retakes" (if there is a submission and retakes disabled)
   if (lastSub && a.allowMultipleAttempts === false) {
     Toast.show("Retakes are disabled for this assignment.", "info");
     return;
   }
 
+  // --- RESUME PATH ---
+  const attemptSummary = AppState._attemptsByAssignmentId?.[a.id] || null;
+  if (attemptSummary && attemptSummary.id) {
+    try {
+      const latestAttempt = await DataManager.getAttempt(attemptSummary.id);
+
+      if (latestAttempt && latestAttempt.status === "in_progress") {
+        const ids = Array.isArray(latestAttempt.questionOrderIds)
+          ? latestAttempt.questionOrderIds
+          : [];
+
+        if (ids.length) {
+          const loaded = await QuestionService.getByIds(ids);
+          const map = new Map(
+            (loaded || []).filter(Boolean).map((q) => [q.id, q])
+          );
+          const orderedQuestions = ids.map((id) => map.get(id)).filter(Boolean);
+
+          if (orderedQuestions.length) {
+            startQuizSession({
+              mode: "assignment",
+              assignment: a,
+              questions: orderedQuestions,
+              attempt: latestAttempt,
+            });
+            return;
+          }
+        }
+
+        Toast.show("Resume data missing questions. Starting over.", "info");
+      }
+    } catch (e) {
+      console.error("Resume attempt error", e);
+      Toast.show("Couldn't resume; starting a new attempt.", "info");
+    }
+  }
+
+  // --- START/RETAKE PATH (existing logic, plus create attempt doc) ---
   let questions = [];
 
   try {
@@ -4664,11 +4924,7 @@ startBtn.addEventListener("click", async () => {
     }
 
     // 2) Unit assignment: load by the single unit
-    else if (
-      type === "unit" &&
-      Array.isArray(a.units) &&
-      a.units.length
-    ) {
+    else if (type === "unit" && Array.isArray(a.units) && a.units.length) {
       questions = await QuestionService.getQuestions({ unit: Number(a.units[0]) });
     }
 
@@ -4691,7 +4947,7 @@ startBtn.addEventListener("click", async () => {
       questions = await QuestionService.getByIds(a.questionIds);
     }
 
-    // 5) Fallback: everything (should rarely happen for assignments)
+    // 5) Fallback: everything (rare for assignments)
     else {
       questions = await QuestionService.getQuestions();
     }
@@ -4710,10 +4966,8 @@ startBtn.addEventListener("click", async () => {
     questions = [...questions].sort(() => Math.random() - 0.5);
   }
 
-  // Apply question limit (supports multiple legacy field names)
-  const limit = Number(
-    a.questionCount ?? a.numQuestions ?? a.totalQuestions ?? 0
-  );
+  // Apply question limit
+  const limit = Number(a.questionCount ?? a.numQuestions ?? a.totalQuestions ?? 0);
   if (limit > 0) {
     questions = questions.slice(0, limit);
   }
@@ -4723,8 +4977,29 @@ startBtn.addEventListener("click", async () => {
     return;
   }
 
-  startQuizSession({ mode: "assignment", assignment: a, questions });
+  // Create/reset the in-progress attempt in Firestore (cross-device resume)
+  let attempt = null;
+  try {
+    attempt = await DataManager.createOrResetInProgressAttempt({
+      userId,
+      assignment: a,
+      questions,
+      timeLimitMinutes: a.timeLimitMinutes ?? null,
+    });
+
+    // Update local map so Resume can show immediately if re-rendered
+    AppState._attemptsByAssignmentId = AppState._attemptsByAssignmentId || {};
+    AppState._attemptsByAssignmentId[a.id] = attempt;
+  } catch (e) {
+    console.error("Create attempt error", e);
+    Toast.show("Couldn't start attempt (check Firestore rules).", "error");
+    return;
+  }
+
+  startQuizSession({ mode: "assignment", assignment: a, questions, attempt });
 });
+/* === /RESUME_ATTEMPTS_FIRESTORE: START/RESUME BUTTON === */
+           
 
             right.appendChild(startBtn);
 
