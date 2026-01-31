@@ -222,30 +222,7 @@ body.app-mode #right-column {
             </button>
           </form>
 
-          <div
-            class="mt-4 border-t border-gray-200 pt-3 space-y-2 text-sm"
-          >
-            <p class="text-gray-600">Or jump into a demo account:</p>
-            <div class="grid grid-cols-2 gap-2">
-              <button
-                id="demo-student"
-                type="button"
-                class="px-3 py-1.5 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/80"
-              >
-                Demo student
-              </button>
-              <button
-                id="demo-teacher"
-                type="button"
-                class="px-3 py-1.5 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500/80"
-              >
-                Demo teacher
-              </button>
-            </div>
-            <p class="text-xs text-gray-500">
-              Demo data is shared across users and resets periodically.
-            </p>
-          </div>
+         
         </div>
 
         <!-- App View -->
@@ -9057,44 +9034,7 @@ function renderAssignmentStatusDetail(
         }
       });
 
-      // Demo accounts (anonymous)
-      $("demo-student").addEventListener("click", async () => {
-        try {
-          AppState.role = "student";
-          updateRoleToggleUI();
-          const cred = await auth.signInAnonymously();
-          await DataManager.upsertUserProfile(cred.user.uid, {
-            email: "demo-student@demo.local",
-            role: "student",
-            isDemo: true,
-          });
-        } catch (e) {
-          console.error("Demo student error", e);
-          Toast.show(
-            e.message || "Demo sign-in failed. Check anonymous auth settings.",
-            "error"
-          );
-        }
-      });
-
-      $("demo-teacher").addEventListener("click", async () => {
-        try {
-          AppState.role = "teacher";
-          updateRoleToggleUI();
-          const cred = await auth.signInAnonymously();
-          await DataManager.upsertUserProfile(cred.user.uid, {
-            email: "demo-teacher@demo.local",
-            role: "teacher",
-            isDemo: true,
-          });
-        } catch (e) {
-          console.error("Demo teacher error", e);
-          Toast.show(
-            e.message || "Demo sign-in failed. Check anonymous auth settings.",
-            "error"
-          );
-        }
-      });
+     
 $("logout-btn").addEventListener("click", async () => {
   try {
     LiveData.stop(); // ✅ stop immediately
@@ -9138,7 +9078,8 @@ auth.onAuthStateChanged(async (user) => {
   const subtitle = $("user-subtitle");
   if (subtitle) {
   const modeLabel = `${AppState.role === "teacher" ? "Teacher" : "Student"} mode`;
-  subtitle.textContent = profile?.isDemo ? `Demo account · ${modeLabel}` : modeLabel;
+  subtitle.textContent = modeLabel;
+
 }
 
   showAppView(true);
