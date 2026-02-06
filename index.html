@@ -1859,10 +1859,11 @@ async getByIds(ids) {
     if (!batchIds.length) continue;
 
     const snap = await db
-      .collection("questions")
-      .where(firebase.firestore.FieldPath.documentId(), "in", batchIds)
-      .get();
-
+  .collection("questions")
+  .where(firebase.firestore.FieldPath.documentId(), "in", batchIds)
+  // ✅ required by your rules: student list queries must include a limit (<= 75)
+  .limit(Math.min(75, batchIds.length || 10))
+  .get();
 snap.docs.forEach((d) => {
   const q = { id: d.id, ...d.data() };
   q.difficulty = normalizeDifficulty(
