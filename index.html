@@ -409,6 +409,20 @@ if (db && db.enablePersistence) {
         });
         return el;
       }
+     /* === PRACTICE_RANDOMIZATION: SHUFFLE (SEARCH ME) ===
+   Fisher–Yates shuffle (unbiased). Use for practice so students see a new order each time.
+*/
+function shuffleCopy(arr) {
+  const a = Array.isArray(arr) ? arr.slice() : [];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
+  }
+  return a;
+}
+/* === /PRACTICE_RANDOMIZATION: SHUFFLE === */
 function buildQuestionHoverPreview(q, { align = "left" } = {}) {
   const sideClass = align === "right" ? "right-2" : "left-2";
   const questionText = q && q.question ? q.question : "(no text)";
@@ -3298,14 +3312,14 @@ async function startFullExam() {
     questions = questions
       .slice()
       .sort(() => Math.random() - 0.5)
-      .slice(0, 60);
+      .slice(0, 75);
 
     const pseudoAssignment = {
       id: `full_mc_${Date.now()}`,
       title: "Full MC Exam Simulation",
       classId: null,
       type: "fullExam",
-      timeLimitMinutes: 70,
+      timeLimitMinutes: 90,
       isPractice: true,
     };
 
@@ -3313,7 +3327,7 @@ async function startFullExam() {
       mode: "fullExam",
       assignment: pseudoAssignment,
       questions,
-      timeLimitMinutes: 70,
+      timeLimitMinutes: 90,
     });
   } catch (e) {
     console.error("Full exam error", e);
@@ -3510,21 +3524,30 @@ else if (mode === "skill") {
     return;
   }
 
+  /* === PRACTICE_RANDOMIZATION: SKILL (SEARCH ME) === */
   questions = await QuestionService.getQuestions({ skill: chosenSkill });
 
-  if (limit && questions.length > limit) {
-    questions = questions
-      .sort(() => Math.random() - 0.5)
-      .slice(0, limit);
-  }
-}
+  // ✅ Randomize EVERY time (even when the pool <= limit)
+  questions = shuffleCopy(questions);
 
+  if (limit && questions.length > limit) {
+    questions = questions.slice(0, limit);
+  }
+  /* === /PRACTICE_RANDOMIZATION: SKILL === */
+}
 else if (mode === "unit") {
-      // Simple unit-based practice
-      questions = await QuestionService.getQuestions({ unit });
-      if (limit && questions.length > limit) {
-        questions = questions.slice(0, limit);
-      }
+  /* === PRACTICE_RANDOMIZATION: UNIT (SEARCH ME) === */
+  // Simple unit-based practice (randomize each attempt)
+  questions = await QuestionService.getQuestions({ unit });
+
+  // ✅ Shuffle BEFORE slicing so you don't always get the same first N
+  questions = shuffleCopy(questions);
+
+  if (limit && questions.length > limit) {
+    questions = questions.slice(0, limit);
+  }
+  /* === /PRACTICE_RANDOMIZATION: UNIT === */
+
     } else if (mode === "smart") {
      // Smart mixed practice: SR + weakest units
 const dueSR = await SpacedRepetition.getDueQuestions(userId, 10);
@@ -5638,7 +5661,7 @@ const countInput = createEl(
           );
           card.appendChild(
             createEl("p", "text-sm text-gray-600", [
-              "Simulate the full AP Psychology MC section (60 questions, 70 minutes, one pass).",
+              "Simulate the full AP Psychology MC section (75 questions, 90 minutes, one pass).",
             ])
           );
 
