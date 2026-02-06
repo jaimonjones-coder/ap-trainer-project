@@ -359,7 +359,7 @@ body.app-mode #right-column {
     <script>
       // ---------------- Firebase init ----------------
       const firebaseConfig = {
-        apiKey: "AIzaSyCiOzV4IScS0Cg1odtnIWaGGZVGCDnvQfQ",
+       apiKey: "AIzaSyAqHxsJGSjO3ErIr1weeKY3z7jLwrPwg4s",
         authDomain: "ap-psychology-lms.firebaseapp.com",
         projectId: "ap-psychology-lms",
         storageBucket: "ap-psychology-lms.appspot.com",
@@ -1728,32 +1728,48 @@ async voidSubmission(submissionId, teacherId) {
 async unsubmitSubmission(submissionId) {
   return this.voidSubmission(submissionId, AppState.user?.uid || null);
 },
-   async getQuestions(filter = {}) {
+   /* === QUESTION_BANK_GUARD: GET QUESTIONS (SEARCH ME) === */
+async getQuestions(filter = {}) {
+  const unit = filter.unit;
+  const skill = filter.skill;
+
+  // Treat UI role OR loaded profile role as "teacher mode"
+  const isTeacherMode =
+    (AppState && AppState.role === "teacher") ||
+    (AppState && AppState.userProfile && AppState.userProfile.role === "teacher");
+
+  // Students: hard cap per request
+  const STUDENT_MAX = 75;
+
+  // Normalize limit
+  let n = Number(filter.limit);
+  if (!Number.isFinite(n) || n <= 0) n = null;
+
+  // ✅ Student safety: never unlimited
+  if (!isTeacherMode) {
+    n = n ? Math.min(n, STUDENT_MAX) : STUDENT_MAX; // default 75
+  }
+
   let ref = db.collection("questions");
+  if (unit != null && unit !== "") ref = ref.where("unit", "==", Number(unit));
+  if (skill != null && String(skill).trim() !== "")
+    ref = ref.where("skill", "==", String(skill).trim());
 
-  if (filter.unit != null) {
-    ref = ref.where("unit", "==", filter.unit);
-  }
-
-  if (filter.skill != null && String(filter.skill).trim() !== "") {
-    ref = ref.where("skill", "==", String(filter.skill).trim());
-  }
+  // Apply limit if set (students always have one)
+  if (n) ref = ref.limit(n);
 
   const snap = await ref.get();
-
-  const qs = snap.docs.map((d) => {
-    const q = { id: d.id, ...d.data() };
+  const qs = [];
+  snap.forEach((doc) => {
+    const q = { id: doc.id, ...doc.data() };
     q.difficulty = normalizeDifficulty(
       q.difficulty ?? q.difficultyLevel ?? q.level ?? q.Difficulty
     );
-    return q;
+    qs.push(q);
   });
-
-  // IMPORTANT: pass the whole filter so seedQuestions can filter by skill too
-  if (!qs.length) return QuestionService.seedQuestions(filter);
-
   return qs;
 },
+/* === /QUESTION_BANK_GUARD: GET QUESTIONS === */
         async updateQuestion(id, updates) {
           if (!id || !updates) return;
           const ref = db.collection("questions").doc(id);
@@ -5562,7 +5578,7 @@ const countInput = createEl(
   // Populate skills asynchronously (from question bank)
   (async () => {
     try {
-      const all = await QuestionService.getQuestions();
+      const all = await QuestionService.getQuestions({ limit: 75 }); // ✅ don't read entire bank
       const skills = Array.from(
         new Set((all || []).map((q) => String(q.skill || "").trim()).filter(Boolean))
       ).sort((a, b) => a.localeCompare(b));
