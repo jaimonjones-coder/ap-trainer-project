@@ -46,6 +46,16 @@
   z-index: 9999;
 }
 
+/* === A11Y: modal scroll lock + reduced motion (SEARCH ME: A11Y_MODAL_CSS) === */
+body.modal-open { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; }
+  .transition, .transition-colors, .transition-all {
+    transition: none !important;
+  }
+}
+
 /* ================================
    Full-screen App Mode (after login)
    ================================ */
@@ -358,15 +368,47 @@ body.app-mode #right-column {
 </div>
     <script>
       // ---------------- Firebase init ----------------
-      const firebaseConfig = {
-       apiKey: "AIzaSyAqHxsJGSjO3ErIr1weeKY3z7jLwrPwg4s",
-        authDomain: "ap-psychology-lms.firebaseapp.com",
-        projectId: "ap-psychology-lms",
-        storageBucket: "ap-psychology-lms.appspot.com",
-        messagingSenderId: "905910734852",
-        appId: "1:905910734852:web:77ee16fa84422fd2efe551",
-        measurementId: "G-J369F5TETL",
+      const APP_ENV = (
+        new URLSearchParams(window.location.search).get("env") ||
+        localStorage.getItem("ap_trainer_env") ||
+        "prod"
+      ).toLowerCase();
+
+      const FIREBASE_CONFIGS = {
+        prod: {
+          apiKey: "AIzaSyAqHxsJGSjO3ErIr1weeKY3z7jLwrPwg4s",
+          authDomain: "ap-psychology-lms.firebaseapp.com",
+          projectId: "ap-psychology-lms",
+          storageBucket: "ap-psychology-lms.appspot.com",
+          messagingSenderId: "905910734852",
+          appId: "1:905910734852:web:77ee16fa84422fd2efe551",
+          measurementId: "G-J369F5TETL",
+        },
+        staging: {
+          apiKey: "REPLACE_STAGING_API_KEY",
+          authDomain: "REPLACE_STAGING_AUTH_DOMAIN",
+          projectId: "REPLACE_STAGING_PROJECT_ID",
+          storageBucket: "REPLACE_STAGING_STORAGE_BUCKET",
+          messagingSenderId: "REPLACE_STAGING_SENDER_ID",
+          appId: "REPLACE_STAGING_APP_ID",
+        },
+        dev: {
+          apiKey: "REPLACE_DEV_API_KEY",
+          authDomain: "REPLACE_DEV_AUTH_DOMAIN",
+          projectId: "REPLACE_DEV_PROJECT_ID",
+          storageBucket: "REPLACE_DEV_STORAGE_BUCKET",
+          messagingSenderId: "REPLACE_DEV_SENDER_ID",
+          appId: "REPLACE_DEV_APP_ID",
+        },
       };
+
+      const firebaseConfig = FIREBASE_CONFIGS[APP_ENV] || FIREBASE_CONFIGS.prod;
+
+      if (APP_ENV !== "prod" && /REPLACE_/.test(firebaseConfig.apiKey || "")) {
+        console.warn(
+          `APP_ENV=${APP_ENV} is using placeholder Firebase config. Falling back to prod is recommended until configured.`
+        );
+      }
 
       try {
         firebase.initializeApp(firebaseConfig);
@@ -409,6 +451,236 @@ if (db && db.enablePersistence) {
         });
         return el;
       }
+
+      // ---------------- Release smoke checklist ----------------
+      const RELEASE_SMOKE_CHECKLIST = [
+        "Auth: signup/login/logout",
+        "Teacher: create class",
+        "Student: join class by code",
+        "Teacher: create assignment",
+        "Student: start + submit practice/assignment",
+        "Teacher: view grades/results dashboard",
+        "Question Library modal opens/closes via click + Escape",
+        "Student progress modal opens/closes via click + Escape",
+      ];
+
+      window.printReleaseSmokeChecklist = function printReleaseSmokeChecklist() {
+        console.log("AP Trainer release smoke checklist:");
+        RELEASE_SMOKE_CHECKLIST.forEach((item, i) => {
+          console.log(`${i + 1}. ${item}`);
+        });
+      };
+
+      function getFocusableElements(container) {
+        if (!container) return [];
+        return Array.from(
+          container.querySelectorAll(
+            'a[href], button:not([disabled]), textarea, input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+      }
+
+      function trapTabKey(event, container) {
+        if (event.key !== "Tab") return;
+        const focusables = getFocusableElements(container);
+        if (!focusables.length) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+
+        if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+
+      /* === A11Y: MODAL MANAGER (SEARCH ME: MODAL_MANAGER) === */
+      const ModalManager = (() => {
+        let lastFocusEl = null;
+        let openCount = 0;
+
+        function setInertBackground(isInert) {
+          const shell = document.getElementById("page-shell");
+          if (!shell) return;
+
+          if ("inert" in shell) {
+            shell.inert = !!isInert;
+          } else {
+            shell.setAttribute("aria-hidden", isInert ? "true" : "false");
+          }
+        }
+
+        function lockScroll(on) {
+          document.body.classList.toggle("modal-open", !!on);
+        }
+
+        function ensureDialogAttrs(overlay, titleEl) {
+          if (!overlay) return;
+          overlay.setAttribute("role", "dialog");
+          overlay.setAttribute("aria-modal", "true");
+          if (titleEl?.id) {
+            overlay.setAttribute("aria-labelledby", titleEl.id);
+          }
+        }
+
+        function open({ overlay, dialog, titleEl, closeFn, focusFirstEl }) {
+          if (!overlay || !dialog) return;
+
+          if (openCount === 0) {
+            lastFocusEl = document.activeElement;
+            lockScroll(true);
+            setInertBackground(true);
+          }
+          openCount++;
+
+          ensureDialogAttrs(overlay, titleEl);
+          overlay.classList.remove("hidden");
+          overlay.classList.add("flex");
+
+          const onKey = (e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              closeFn?.();
+            }
+            trapTabKey(e, dialog || overlay);
+          };
+
+          const onClick = (e) => {
+            if (e.target === overlay) closeFn?.();
+          };
+
+          overlay.addEventListener("keydown", onKey);
+          overlay.addEventListener("click", onClick);
+          overlay.__modalHandlers = { onKey, onClick };
+
+          const focusTarget =
+            focusFirstEl ||
+            dialog.querySelector(
+              "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"
+            );
+          if (focusTarget && typeof focusTarget.focus === "function") {
+            setTimeout(() => focusTarget.focus(), 0);
+          }
+        }
+
+        function close({ overlay }) {
+          if (!overlay) return;
+
+          overlay.classList.add("hidden");
+          overlay.classList.remove("flex");
+
+          const h = overlay.__modalHandlers;
+          if (h) {
+            overlay.removeEventListener("keydown", h.onKey);
+            overlay.removeEventListener("click", h.onClick);
+            overlay.__modalHandlers = null;
+          }
+
+          openCount = Math.max(0, openCount - 1);
+
+          if (openCount === 0) {
+            lockScroll(false);
+            setInertBackground(false);
+            if (lastFocusEl && typeof lastFocusEl.focus === "function") {
+              lastFocusEl.focus();
+            }
+            lastFocusEl = null;
+          }
+        }
+
+        return { open, close };
+      })();
+
+      function requireNonEmptyString(value, fieldName) {
+        if (typeof value !== "string" || !value.trim()) {
+          throw new Error(`${fieldName} is required.`);
+        }
+        return value.trim();
+      }
+
+      function validateAssignmentPayload(payload, { partial = false } = {}) {
+        const clean = { ...(payload || {}) };
+
+        const requireIfPresent = (key, label) => {
+          if (partial) {
+            if (key in clean) clean[key] = requireNonEmptyString(clean[key], label);
+          } else {
+            clean[key] = requireNonEmptyString(clean[key], label);
+          }
+        };
+
+        requireIfPresent("title", "Assignment title");
+        requireIfPresent("classId", "Class id");
+        requireIfPresent("teacherId", "Teacher id");
+
+        if ("unit" in clean && clean.unit != null && clean.unit !== "") {
+          const unitNum = Number(clean.unit);
+          if (!Number.isFinite(unitNum) || unitNum < 1 || unitNum > 9) {
+            throw new Error("Assignment unit must be between 1 and 9.");
+          }
+          clean.unit = unitNum;
+        }
+
+        if ("questionCount" in clean && clean.questionCount != null && clean.questionCount !== "") {
+          const qCount = Number(clean.questionCount);
+          if (!Number.isFinite(qCount) || qCount < 1 || qCount > 200) {
+            throw new Error("Question count must be between 1 and 200.");
+          }
+          clean.questionCount = qCount;
+        }
+
+        if (
+          "timeLimitMinutes" in clean &&
+          clean.timeLimitMinutes != null &&
+          clean.timeLimitMinutes !== ""
+        ) {
+          const t = Number(clean.timeLimitMinutes);
+          if (!Number.isFinite(t) || t < 1 || t > 300) {
+            throw new Error("Time limit must be between 1 and 300 minutes.");
+          }
+          clean.timeLimitMinutes = t;
+        }
+
+        return clean;
+      }
+
+      function validateQuestionPayload(patch, { partial = true } = {}) {
+        const next = { ...(patch || {}) };
+
+        if (!partial || "question" in next) {
+          next.question = requireNonEmptyString(next.question, "Question text");
+        }
+
+        if ("explanation" in next && next.explanation != null) {
+          next.explanation = String(next.explanation).trim();
+        }
+
+        if (!partial || "options" in next) {
+          if (!Array.isArray(next.options) || next.options.length < 2) {
+            throw new Error("Question options must include at least two choices.");
+          }
+          next.options = next.options.map((opt, i) =>
+            requireNonEmptyString(String(opt || ""), `Option ${i + 1}`)
+          );
+        }
+
+        if ("correctIndex" in next && next.correctIndex != null) {
+          const idx = Number(next.correctIndex);
+          if (!Number.isFinite(idx) || idx < 0) {
+            throw new Error("Correct answer index must be a valid non-negative number.");
+          }
+          if (Array.isArray(next.options) && idx >= next.options.length) {
+            throw new Error("Correct answer index is outside the option range.");
+          }
+          next.correctIndex = idx;
+        }
+
+        return next;
+      }
      /* === PRACTICE_RANDOMIZATION: SHUFFLE (SEARCH ME) ===
    Fisher–Yates shuffle (unbiased). Use for practice so students see a new order each time.
 */
@@ -437,13 +709,14 @@ function buildQuestionHoverPreview(q, { align = "left" } = {}) {
     []
   );
 
-  preview.appendChild(
-    createEl(
-      "p",
-      "text-sm font-semibold text-gray-900 leading-relaxed whitespace-pre-wrap break-words",
-      [questionText]
-    )
+  const stemWrap = createEl(
+    "div",
+    "text-sm font-semibold text-gray-900 leading-relaxed whitespace-pre-wrap break-words",
+    []
   );
+  appendQuestionStem(stemWrap, questionText);
+  preview.appendChild(stemWrap);
+  appendQuestionVisual(preview, q, "mt-2");
 
   if (options.length) {
     const ul = createEl("ul", "mt-2 space-y-1 text-sm text-gray-800", []);
@@ -458,13 +731,67 @@ function buildQuestionHoverPreview(q, { align = "left" } = {}) {
 
   return preview;
 }
-      function createElHTML(tag, className = "", html = "") {
+function createElHTML(tag, className = "", html = "") {
   const el = document.createElement(tag);
   if (className) el.className = className;
   if (html != null) {
     el.innerHTML = html;
   }
   return el;
+}
+
+function hasInlineSvgMarkup(text) {
+  return (
+    typeof text === "string" &&
+    /<svg[\s\S]*?>[\s\S]*?<\/svg>/i.test(text)
+  );
+}
+
+function appendQuestionStem(el, stemText, className = "") {
+  if (!el) return;
+  const safeClass = className || "text-gray-900";
+  if (hasInlineSvgMarkup(stemText)) {
+    el.appendChild(createElHTML("div", safeClass, stemText));
+  } else {
+    el.appendChild(createEl("div", safeClass, [stemText || "(no text)"]));
+  }
+}
+
+function getQuestionVisualPayload(q) {
+  if (!q) return { svgMarkup: "", imageUrl: "" };
+  const svgMarkup =
+    q.svgMarkup || q.svg || q.imageSvg || q.diagramSvg || q.mediaSvg || "";
+  const imageUrl =
+    q.imageUrl || q.image || q.imageSrc || q.mediaUrl || q.diagramUrl || "";
+  return {
+    svgMarkup: typeof svgMarkup === "string" ? svgMarkup : "",
+    imageUrl: typeof imageUrl === "string" ? imageUrl : "",
+  };
+}
+
+function appendQuestionVisual(el, q, className = "mt-2") {
+  if (!el) return;
+  const media = getQuestionVisualPayload(q);
+
+  if (hasInlineSvgMarkup(media.svgMarkup)) {
+    el.appendChild(
+      createElHTML(
+        "div",
+        `${className} rounded-lg border border-gray-200 bg-gray-50 p-2 overflow-x-auto`,
+        media.svgMarkup
+      )
+    );
+    return;
+  }
+
+  if (media.imageUrl) {
+    const img = document.createElement("img");
+    img.src = media.imageUrl;
+    img.alt = "Question visual";
+    img.className = `${className} max-h-56 w-auto rounded-lg border border-gray-200 bg-white`;
+    img.loading = "lazy";
+    el.appendChild(img);
+  }
 }
 // ------------------------------
 // TeacherDraftQuestionSet (shared between Results + Assignments)
@@ -645,9 +972,10 @@ function buildQuestionPreviewEl(q) {
   const correctIndex = showCorrect ? getCorrectIndexFromQuestion(q) : null;
 
   // Content
-  wrap.appendChild(
-    createEl("p", "font-medium mb-2", [q.question || "(no text)"])
-  );
+  const previewStem = createEl("div", "font-medium mb-2", []);
+  appendQuestionStem(previewStem, q.question || "(no text)");
+  wrap.appendChild(previewStem);
+  appendQuestionVisual(wrap, q, "mb-2");
 
   const opts = Array.isArray(q.options) ? q.options : [];
 
@@ -686,6 +1014,54 @@ function buildQuestionPreviewEl(q) {
   }
 
   return wrap;
+}
+
+function openPreviewModal(q) {
+  const overlay = createEl(
+    "div",
+    "fixed inset-0 z-50 hidden items-center justify-center bg-black/40",
+    []
+  );
+  const panel = createEl(
+    "div",
+    "bg-white rounded-xl shadow-lg max-w-2xl w-full mx-3 max-h-[90vh] overflow-auto p-4",
+    []
+  );
+  const title = createEl("h3", "text-sm font-semibold mb-2", ["Question preview"]);
+  title.id = "preview-modal-title";
+  panel.appendChild(title);
+
+  const preview = buildQuestionPreviewEl(q);
+  preview.style.position = "static";
+  preview.style.display = "block";
+  preview.style.pointerEvents = "auto";
+  preview.classList.remove("q-hover-preview");
+  panel.appendChild(preview);
+
+  const closeBtn = createEl(
+    "button",
+    "mt-3 px-3 py-1.5 rounded-lg border border-gray-300 text-sm",
+    ["Close"]
+  );
+  closeBtn.type = "button";
+  panel.appendChild(closeBtn);
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  const close = () => {
+    ModalManager.close({ overlay });
+    overlay.remove();
+  };
+  closeBtn.addEventListener("click", close);
+
+  ModalManager.open({
+    overlay,
+    dialog: panel,
+    titleEl: title,
+    closeFn: close,
+    focusFirstEl: closeBtn,
+  });
 }
 
 function positionQuestionPreview(previewEl, anchorEl) {
@@ -871,6 +1247,8 @@ function formatDifficultyLabel(raw) {
             }`,
             [message]
           );
+          div.setAttribute("role", type === "error" ? "alert" : "status");
+          div.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
           document.body.appendChild(div);
           setTimeout(() => div.remove(), 2600);
         },
@@ -1432,12 +1810,15 @@ const LiveData = {
         },
 
         async createClass(name, teacherId, teacherEmail) {
+          const safeName = requireNonEmptyString(name, "Class name");
+          const safeTeacherId = requireNonEmptyString(teacherId, "Teacher id");
+          const safeTeacherEmail = requireNonEmptyString(teacherEmail, "Teacher email");
           const code = Math.random().toString(36).substring(2, 8).toUpperCase();
           const ref = await db.collection("classes").add({
-            name,
+            name: safeName,
             code,
-            teacherId,
-            teacherEmail,
+            teacherId: safeTeacherId,
+            teacherEmail: safeTeacherEmail,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             students: [],
             studentIds: [],
@@ -1524,8 +1905,9 @@ async removeStudentFromClass(classId, studentId) {
        await ref.delete();
      },
        async createAssignment(data) {
+  const clean = validateAssignmentPayload(data, { partial: false });
   const ref = await db.collection("assignments").add({
-    ...data,
+    ...clean,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
   const snap = await ref.get();
@@ -1534,9 +1916,10 @@ async removeStudentFromClass(classId, studentId) {
 
 async updateAssignment(id, updates) {
   if (!id || !updates) return;
+  const clean = validateAssignmentPayload(updates, { partial: true });
   const ref = db.collection("assignments").doc(id);
   await ref.update({
-    ...updates,
+    ...clean,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
 },
@@ -1647,6 +2030,7 @@ async listAssignmentsForTeacher(teacherId) {
             status: "in_progress",
             questionOrderIds: qIds,
             answers: Array(qIds.length).fill(null),
+            confidenceAnswers: Array(qIds.length).fill(null),
             currentIndex: 0,
             startedAtMs: nowMs,
             timeLimitMinutes: timeLimitMinutes ?? assignment.timeLimitMinutes ?? null,
@@ -1660,16 +2044,20 @@ async listAssignmentsForTeacher(teacherId) {
           return { id: attemptId, ...payload };
         },
 
-        async updateAttemptProgress(attemptId, { answers, currentIndex }) {
+        async updateAttemptProgress(attemptId, { answers, confidenceAnswers, currentIndex }) {
           if (!attemptId) return;
           const ref = db.collection("attempts").doc(attemptId);
 
           const safeAnswers = Array.isArray(answers) ? answers : [];
+          const safeConfidenceAnswers = Array.isArray(confidenceAnswers)
+            ? confidenceAnswers
+            : [];
           const idx = Number.isFinite(currentIndex) ? currentIndex : 0;
 
           await ref.set(
             {
               answers: safeAnswers,
+              confidenceAnswers: safeConfidenceAnswers,
               currentIndex: idx,
               status: "in_progress",
               lastSavedAtMs: Date.now(),
@@ -1772,9 +2160,10 @@ async getQuestions(filter = {}) {
 /* === /QUESTION_BANK_GUARD: GET QUESTIONS === */
         async updateQuestion(id, updates) {
           if (!id || !updates) return;
+          const clean = validateQuestionPayload(updates, { partial: true });
           const ref = db.collection("questions").doc(id);
           await ref.update({
-            ...updates,
+            ...clean,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           });
         },
@@ -1797,9 +2186,10 @@ async getQuestions(filter = {}) {
           for (const chunk of chunks) {
             const batch = db.batch();
             chunk.forEach((q) => {
+              const safeQuestion = validateQuestionPayload(q, { partial: false });
               const ref = db.collection("questions").doc();
               batch.set(ref, {
-                ...q,
+                ...safeQuestion,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
               });
             });
@@ -1946,6 +2336,82 @@ function masteryBandToColor(band) {
       return "bg-gray-100 text-gray-500 border-gray-200";
   }
 };
+
+function getMasteryStateFromUnit(u) {
+  const answered = Number(u?.answered) || 0;
+  const correct = Number(u?.correct) || 0;
+  const accuracy = answered > 0 ? correct / answered : 0;
+
+  if (answered < 5) {
+    return {
+      key: "not-enough",
+      label: "Not enough data",
+      tone: "text-gray-600",
+      nextStep: "Do a 10-question unit set to establish a baseline.",
+    };
+  }
+  if (accuracy < 0.7) {
+    return {
+      key: "needs-work",
+      label: "Needs Work",
+      tone: "text-rose-700",
+      nextStep: "Do 15 mixed questions in this unit + review every distractor note.",
+    };
+  }
+  if (accuracy < 0.85) {
+    return {
+      key: "developing",
+      label: "Developing",
+      tone: "text-amber-700",
+      nextStep: "Do 10 scenario-heavy questions and target your two most-missed skills.",
+    };
+  }
+  return {
+    key: "proficient",
+    label: "Proficient",
+    tone: "text-emerald-700",
+    nextStep: "Maintain with a 5-question spaced check in 2–3 days.",
+  };
+}
+
+function confidenceText(level) {
+  if (level === "high") return "High";
+  if (level === "medium") return "Medium";
+  if (level === "low") return "Low";
+  return "—";
+}
+
+function computeTopMisconceptions(submissions, limit = 5) {
+  const map = new Map();
+  (submissions || []).forEach((s) => {
+    (s.questionResults || []).forEach((qr) => {
+      if (qr.isCorrect) return;
+      const qid = qr.questionId || qr.id || "unknown";
+      const chosen =
+        typeof qr.chosenIndex === "number"
+          ? qr.chosenIndex
+          : typeof qr.selectedIndex === "number"
+          ? qr.selectedIndex
+          : null;
+      const choice = chosen == null ? "none" : String.fromCharCode(65 + chosen);
+      const key = `${qid}::${choice}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          questionId: qid,
+          question: qr.question || "(question text unavailable)",
+          chosenLabel: choice,
+          count: 0,
+          unit: qr.unit || null,
+        });
+      }
+      map.get(key).count += 1;
+    });
+  });
+  return Array.from(map.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
 // ---------------- Analytics Service ----------------
 const AnalyticsService = {
   computeStudentOverview(submissions) {
@@ -2228,24 +2694,23 @@ const TeacherGradesState = {
   selectedClassId: null,
 };
 
+const ENABLE_COPY_GUARD = false;
+
 function ensureStudentProgressModalEvents() {
   const overlay = $("student-progress-overlay");
   const closeBtn = $("student-progress-close");
+  const titleEl = $("student-progress-title");
   if (!overlay || !closeBtn || studentProgressModalInitialized) return;
   studentProgressModalInitialized = true;
 
+  if (titleEl && !titleEl.id) titleEl.id = "student-progress-title";
+
   closeBtn.addEventListener("click", closeStudentProgressModal);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
-      closeStudentProgressModal();
-    }
-  });
 }
 function closeStudentProgressModal() {
   const overlay = $("student-progress-overlay");
   if (!overlay) return;
-  overlay.classList.add("hidden");
-  overlay.classList.remove("flex");
+  ModalManager.close({ overlay });
 }
 
 async function openStudentProgressModal(studentId, label) {
@@ -2257,8 +2722,13 @@ async function openStudentProgressModal(studentId, label) {
   ensureStudentProgressModalEvents();
 
   titleEl.textContent = label || "Student";
-  overlay.classList.remove("hidden");
-  overlay.classList.add("flex");
+  ModalManager.open({
+    overlay,
+    dialog: $("student-progress-modal"),
+    titleEl,
+    closeFn: closeStudentProgressModal,
+    focusFirstEl: $("student-progress-close"),
+  });
   body.innerHTML =
     "<p class='text-sm text-gray-500'>Loading student progress…</p>";
 
@@ -2491,18 +2961,12 @@ function ensureQuestionLibraryEvents() {
   questionLibraryInitialized = true;
 
   closeBtn.addEventListener("click", closeQuestionLibrary);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
-      closeQuestionLibrary();
-    }
-  });
 }
 
 function closeQuestionLibrary() {
   const overlay = $("question-library-overlay");
   if (!overlay) return;
-  overlay.classList.add("hidden");
-  overlay.classList.remove("flex");
+  ModalManager.close({ overlay });
 }
 
 async function openQuestionLibrary() {
@@ -2511,9 +2975,17 @@ async function openQuestionLibrary() {
   if (!overlay || !body) return;
 
   ensureQuestionLibraryEvents();
+  const modal = $("question-library-modal");
+  const title = modal?.querySelector("h2");
+  if (title && !title.id) title.id = "question-library-title";
 
-  overlay.classList.remove("hidden");
-  overlay.classList.add("flex");
+  ModalManager.open({
+    overlay,
+    dialog: modal,
+    titleEl: title,
+    closeFn: closeQuestionLibrary,
+    focusFirstEl: $("question-library-close"),
+  });
   body.innerHTML =
     "<p class='text-sm text-gray-500'>Loading questions…</p>";
 
@@ -2828,19 +3300,23 @@ if (!filtered.length) {
 const stdLabel = q.standardCode ? " · " + q.standardCode : "";
 const skillLabel = q.skill ? " · " + q.skill : "";
 const diffLabel = q.difficulty ? " · " + formatDifficultyLabel(q.difficulty) : "";
-        const titleText =
-          q.question && q.question.length > 160
-            ? q.question.slice(0, 157) + "…"
-            : q.question || "(no text)";
+        const rawQuestionText = q.question || "";
+        const titleText = hasInlineSvgMarkup(rawQuestionText)
+          ? "[Question includes SVG]"
+          : rawQuestionText.length > 160
+          ? rawQuestionText.slice(0, 157) + "…"
+          : rawQuestionText || "(no text)";
 
-        const left = createEl("div", "", [
-          createEl("p", "text-sm font-medium text-gray-900", [
-            titleText,
-          ]),
+        const left = createEl("div", "", []);
+        const titleEl = createEl("p", "text-sm font-medium text-gray-900", []);
+        appendQuestionStem(titleEl, titleText);
+        left.appendChild(titleEl);
+        appendQuestionVisual(left, q, "mt-1");
+        left.appendChild(
           createEl("p", "text-xs text-gray-500", [
 unitLabel + stdLabel + skillLabel + diffLabel,
-          ]),
-        ]);
+          ])
+        );
 
         const btnRow = createEl(
           "div",
@@ -2853,6 +3329,13 @@ unitLabel + stdLabel + skillLabel + diffLabel,
           "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
           ["Edit text"]
         );
+        const previewBtn = createEl(
+          "button",
+          "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
+          ["👁 Preview"]
+        );
+        previewBtn.type = "button";
+        previewBtn.addEventListener("click", () => openPreviewModal(q));
         const explainBtn = createEl(
           "button",
           "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
@@ -2901,6 +3384,7 @@ correctBtn.addEventListener("click", async () => {
           ["Delete"]
         );
 
+        btnRow.appendChild(previewBtn);
         btnRow.appendChild(editBtn);
 btnRow.appendChild(explainBtn);
 btnRow.appendChild(correctBtn);
@@ -3776,6 +4260,7 @@ let combined = [...srQs, ...weakQuestions];
         try {
           await DataManager.updateAttemptProgress(quiz.attemptId, {
             answers: quiz.answers,
+            confidenceAnswers: quiz.confidenceAnswers,
             currentIndex: quiz.index,
           });
         } catch (e) {
@@ -3808,6 +4293,9 @@ let combined = [...srQs, ...weakQuestions];
           index: initialIndex,
           startedAt: Number(attempt?.startedAtMs) || Date.now(),
           answers: Array.isArray(attempt?.answers) ? attempt.answers : [],
+          confidenceAnswers: Array.isArray(attempt?.confidenceAnswers)
+            ? attempt.confidenceAnswers
+            : [],
           isSubmitting: false,
           attemptId: attempt?.id || null,
           timeLimitMinutes:
@@ -3929,8 +4417,8 @@ function renderQuiz() {
     "bg-white border border-gray-200 rounded-xl p-4 md:p-5 shadow-sm space-y-3",
     []
   );
-// Anti-copy (only for assignments). Not foolproof, but blocks casual copy/paste.
-if (quiz.mode === "assignment") {
+// Anti-copy guard can interfere with accessibility tooling; keep configurable.
+if (ENABLE_COPY_GUARD && quiz.mode === "assignment") {
   qCard.classList.add("no-copy");
 
   // Block right-click menu on the question card
@@ -3971,7 +4459,40 @@ if (quiz.mode === "assignment") {
     list.appendChild(btn);
   });
 
-   qCard.appendChild(list);
+	   qCard.appendChild(list);
+
+  const confidenceWrap = createEl(
+    "div",
+    "mt-1 border-t border-gray-100 pt-3",
+    []
+  );
+  confidenceWrap.appendChild(
+    createEl("p", "text-xs font-medium text-gray-700 mb-1", [
+      "Confidence before reveal",
+    ])
+  );
+
+  const confidenceRow = createEl("div", "flex flex-wrap gap-2", []);
+  ["low", "medium", "high"].forEach((level) => {
+    const isSelected = quiz.confidenceAnswers?.[quiz.index] === level;
+    const btn = createEl(
+      "button",
+      "px-2.5 py-1 rounded-full border text-xs " +
+        (isSelected
+          ? "bg-blue-50 border-blue-500 text-blue-700"
+          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"),
+      [confidenceText(level)]
+    );
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      quiz.confidenceAnswers[quiz.index] = level;
+      saveCurrentAttemptProgressDebounced("confidence");
+      renderQuiz();
+    });
+    confidenceRow.appendChild(btn);
+  });
+  confidenceWrap.appendChild(confidenceRow);
+  qCard.appendChild(confidenceWrap);
   wrapper.appendChild(qCard);
 
   const controls = createEl(
@@ -4163,7 +4684,10 @@ if (results.canShowAnswers === false) {
         ])
       );
 
-      card.appendChild(createEl("div", "text-gray-900 mb-2", [questionText]));
+      const resultStem = createEl("div", "text-gray-900 mb-2", []);
+      appendQuestionStem(resultStem, questionText);
+      card.appendChild(resultStem);
+      appendQuestionVisual(card, r, "mb-2");
 
       card.appendChild(
         createEl("div", "text-sm text-gray-700 mb-1", ["Your answer: ", selectedText])
@@ -4173,19 +4697,65 @@ if (results.canShowAnswers === false) {
         createEl("div", "text-sm text-gray-700 mb-2", ["Correct answer: ", correctText])
       );
 
-      if (r.explanation) {
-        card.appendChild(createEl("div", "text-sm text-gray-800", [r.explanation]));
+      if (r.confidence) {
+        card.appendChild(
+          createEl("div", "text-xs text-gray-600 mb-2", [
+            `Confidence: ${confidenceText(r.confidence)}`,
+            r.overconfidentMiss ? " • Overconfident miss" : "",
+          ])
+        );
       }
 
+      if (r.explanation) {
+        const explainCard = createEl(
+          "div",
+          "text-sm text-gray-800 bg-blue-50 border border-blue-100 rounded-lg p-2",
+          []
+        );
+        explainCard.appendChild(
+          createEl("div", "text-xs font-semibold text-blue-900 mb-1", [
+            "Why the correct answer is correct",
+          ])
+        );
+        explainCard.appendChild(createEl("div", "", [r.explanation]));
+        card.appendChild(explainCard);
+      }
+
+      card.appendChild(
+        createEl("div", "text-xs text-gray-700 mt-2", [
+          "Clue to notice: ",
+          r.clue ||
+            "Look for wording in the scenario that uniquely maps to the target concept.",
+        ])
+      );
+
       const notes = r.distractorNotes || r.distractorNote || null;
-      if (Array.isArray(notes) && notes.length) {
+      if ((Array.isArray(notes) && notes.length) || (notes && typeof notes === "object")) {
         const dl = createEl("div", "mt-2 text-sm text-gray-700", []);
         dl.appendChild(
-          createEl("div", "font-medium mb-1", ["Why the other choices are wrong:"])
+          createEl("div", "font-medium mb-1", [
+            "Why each choice is right/wrong in this scenario:",
+          ])
         );
 
         const ul = createEl("ul", "list-disc pl-5 space-y-1", []);
-        notes.forEach((note) => ul.appendChild(createEl("li", "", [note])));
+        if (Array.isArray(notes)) {
+          notes.forEach((note) => ul.appendChild(createEl("li", "", [note])));
+        } else {
+          options.forEach((opt, i) => {
+            const letter = String.fromCharCode(65 + i);
+            const note = notes[letter];
+            ul.appendChild(
+              createEl("li", "", [
+                `${letter}. ${opt || "(blank option)"} — `,
+                note ||
+                  (i === correctIndex
+                    ? "Correct for this scenario."
+                    : "Not the best fit for this scenario."),
+              ])
+            );
+          });
+        }
         dl.appendChild(ul);
         card.appendChild(dl);
       }
@@ -4213,6 +4783,7 @@ quiz.isSubmitting = true;
 
         const questions = quiz.questions;
         const answers = quiz.answers;
+        const confidenceAnswers = quiz.confidenceAnswers || [];
         let correctCount = 0;
         const perUnit = {};
         const questionResults = [];
@@ -4221,6 +4792,8 @@ quiz.isSubmitting = true;
           const q = questions[idx];
           const chosenIndex = answers[idx] === undefined ? null : answers[idx];
           const isCorrect = chosenIndex === q.correctIndex;
+          const confidence = confidenceAnswers[idx] || null;
+          const overconfidentMiss = !isCorrect && confidence === "high";
           if (isCorrect) correctCount++;
           const unit = q.unit || 0;
           if (!perUnit[unit]) perUnit[unit] = { answered: 0, correct: 0 };
@@ -4247,6 +4820,28 @@ quiz.isSubmitting = true;
             isCorrect,
             explanation: q.explanation || "",
             distractorNotes: q.distractorNotes || null,
+            svgMarkup:
+              typeof q.svgMarkup === "string"
+                ? q.svgMarkup
+                : typeof q.svg === "string"
+                ? q.svg
+                : typeof q.imageSvg === "string"
+                ? q.imageSvg
+                : "",
+            imageUrl:
+              typeof q.imageUrl === "string"
+                ? q.imageUrl
+                : typeof q.image === "string"
+                ? q.image
+                : typeof q.imageSrc === "string"
+                ? q.imageSrc
+                : "",
+            confidence,
+            overconfidentMiss,
+            clue:
+              typeof q.clue === "string" && q.clue.trim()
+                ? q.clue.trim()
+                : "Identify the exact cue in the scenario that points to the concept before choosing.",
             unit: q.unit || null,
             skill: q.skill || null,
           });
@@ -4596,11 +5191,10 @@ function renderSubmissionReview(sub, opts = {}) {
       "border border-gray-200 rounded-lg p-3 space-y-1",
       []
     );
-    qWrap.appendChild(
-      createEl("p", "text-xs font-semibold text-gray-900", [
-        `${idx + 1}. ${qr.question}`,
-      ])
-    );     
+    const reviewStem = createEl("div", "text-xs font-semibold text-gray-900", []);
+    appendQuestionStem(reviewStem, `${idx + 1}. ${qr.question || "(no text)"}`);
+    qWrap.appendChild(reviewStem);
+    appendQuestionVisual(qWrap, qr, "mt-1 mb-1");
           const yourAnsText =
             qr.chosenIndex == null
               ? "No answer selected"
@@ -4623,14 +5217,29 @@ function renderSubmissionReview(sub, opts = {}) {
               qr.options[qr.correctIndex],
             ])
           );
+          if (qr.confidence) {
+            qWrap.appendChild(
+              createEl("p", "text-xs text-gray-600", [
+                `Confidence: ${confidenceText(qr.confidence)}`,
+                qr.overconfidentMiss ? " • Overconfident miss" : "",
+              ])
+            );
+          }
           if (qr.explanation) {
             qWrap.appendChild(
               createEl("p", "text-sm text-gray-700 mt-1", [
-                "Explanation: ",
+                "Why correct: ",
                 qr.explanation,
               ])
             );
           }
+          qWrap.appendChild(
+            createEl("p", "text-xs text-gray-600", [
+              "Clue to notice: ",
+              qr.clue ||
+                "Find the most diagnostic phrase in the scenario before mapping to the concept.",
+            ])
+          );
 // Per-choice "magic" explanations
 if (qr.distractorNotes && typeof qr.distractorNotes === "object") {
   const explList = createEl(
@@ -5181,6 +5790,45 @@ const units =
 
   heatmapCard.appendChild(heatRow);
   wrapper.appendChild(heatmapCard);
+
+  const masteryCard = createEl(
+    "div",
+    "rounded-xl border border-gray-200 bg-white p-3 space-y-2",
+    []
+  );
+  masteryCard.appendChild(
+    createEl("h2", "text-xs font-semibold text-gray-900", [
+      "Mastery states (actionable)",
+    ])
+  );
+  masteryCard.appendChild(
+    createEl("p", "text-xs text-gray-500", [
+      "Needs Work: <70% · Developing: 70–84% · Proficient: 85%+ (with enough data)",
+    ])
+  );
+
+  const masteryList = createEl("div", "space-y-1", []);
+  units.forEach((unit) => {
+    const u = unitMap[unit] || { answered: 0, correct: 0 };
+    const state = getMasteryStateFromUnit(u);
+    const acc =
+      (Number(u.answered) || 0) > 0
+        ? Math.round((Number(u.correct) / Math.max(1, Number(u.answered))) * 100)
+        : null;
+
+    masteryList.appendChild(
+      createEl("div", "text-xs border border-gray-100 rounded-lg p-2", [
+        createEl("p", "font-medium text-gray-800", [
+          `Unit ${unit}: `,
+          createEl("span", state.tone, [state.label]),
+          acc == null ? "" : ` (${acc}%)`,
+        ]),
+        createEl("p", "text-gray-600 mt-0.5", [state.nextStep]),
+      ])
+    );
+  });
+  masteryCard.appendChild(masteryList);
+  wrapper.appendChild(masteryCard);
 
   // ---------- “Next steps” card ----------
   const nextStepsCard = createEl(
@@ -5965,6 +6613,10 @@ const countInput = createEl(
         let classes = [];
         let assignments = [];
         let submissions = [];
+        const DASHBOARD_DAYS_WINDOW = 45;
+        const DASHBOARD_ASSIGNMENT_CAP = 20;
+        let cappedAssignments = [];
+        let skippedCount = 0;
         try {
           const [cls, asg] = await Promise.all([
             DataManager.listClassesForTeacher(teacherId),
@@ -5972,8 +6624,30 @@ const countInput = createEl(
           ]);
           classes = cls || [];
           assignments = asg || [];
+          const nowMs = Date.now();
+          const minMs = nowMs - DASHBOARD_DAYS_WINDOW * 24 * 60 * 60 * 1000;
+          const toMillis = (a) => {
+            if (a?.createdAt?.toMillis) return a.createdAt.toMillis();
+            if (a?.createdAt && typeof a.createdAt === "string") {
+              const ms = Date.parse(a.createdAt);
+              return Number.isFinite(ms) ? ms : 0;
+            }
+            if (a?.dueAt) {
+              const ms = Date.parse(a.dueAt);
+              return Number.isFinite(ms) ? ms : 0;
+            }
+            return 0;
+          };
+
+          cappedAssignments = assignments
+            .slice()
+            .sort((a, b) => toMillis(b) - toMillis(a))
+            .filter((a) => toMillis(a) >= minMs)
+            .slice(0, DASHBOARD_ASSIGNMENT_CAP);
+
+          skippedCount = Math.max(0, assignments.length - cappedAssignments.length);
           const arrays = [];
-          for (const a of assignments) {
+          for (const a of cappedAssignments) {
             try {
               const subs = await DataManager.listSubmissionsForAssignment(
                 a.id
@@ -6046,6 +6720,14 @@ const countInput = createEl(
         );
         wrapper.appendChild(topRow);
 
+        if (skippedCount > 0) {
+          wrapper.appendChild(
+            createEl("div", "text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2", [
+              `Dashboard shows the most recent ${cappedAssignments.length} assignments from the last ${DASHBOARD_DAYS_WINDOW} days for speed. ${skippedCount} older assignment(s) were skipped in this snapshot.`,
+            ])
+          );
+        }
+
         const activityCard = createEl(
           "div",
           "bg-white border border-gray-200 rounded-xl p-4 shadow-sm",
@@ -6098,10 +6780,77 @@ const countInput = createEl(
           });
         }
 
-        wrapper.appendChild(activityCard);
+	        wrapper.appendChild(activityCard);
 
-        content.innerHTML = "";
-        content.appendChild(wrapper);
+        const misconceptions = computeTopMisconceptions(submissions, 6);
+        const misconceptionCard = createEl(
+          "div",
+          "bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2",
+          []
+        );
+        const misHeader = createEl(
+          "div",
+          "flex items-center justify-between gap-2",
+          []
+        );
+        misHeader.appendChild(
+          createEl("h3", "text-xs font-semibold text-gray-800", [
+            "Top misconceptions",
+          ])
+        );
+
+        const remediateBtn = createEl(
+          "button",
+          "px-2.5 py-1 rounded-lg border border-gray-300 text-xs hover:bg-gray-50 disabled:opacity-50",
+          ["Build remediation set"]
+        );
+        remediateBtn.type = "button";
+        remediateBtn.disabled = misconceptions.length === 0;
+        remediateBtn.addEventListener("click", () => {
+          const ids = misconceptions
+            .map((m) => m.questionId)
+            .filter((id) => id && id !== "unknown");
+          if (!ids.length) {
+            Toast.show("No usable question IDs for remediation yet.", "info");
+            return;
+          }
+          TeacherDraftQuestionSet.addMany(ids);
+          TeacherDraftQuestionSet.openPickerOnNextRender = true;
+          AppState.currentTab = "assignments";
+          renderTabs();
+          renderTeacherAssignments();
+          Toast.show("Remediation set drafted from top misconceptions.", "success");
+        });
+        misHeader.appendChild(remediateBtn);
+        misconceptionCard.appendChild(misHeader);
+
+        if (!misconceptions.length) {
+          misconceptionCard.appendChild(
+            createEl("p", "text-sm text-gray-500", [
+              "As submissions come in, you'll see repeated wrong-choice patterns here.",
+            ])
+          );
+        } else {
+          const misList = createEl("div", "space-y-1", []);
+          misconceptions.forEach((m, idx) => {
+            misList.appendChild(
+              createEl("div", "text-xs border border-gray-100 rounded-lg p-2", [
+                createEl("p", "text-gray-800 font-medium", [
+                  `${idx + 1}. ${m.question}`,
+                ]),
+                createEl("p", "text-gray-600", [
+                  `Most selected wrong choice: ${m.chosenLabel} · Misses: ${m.count}`,
+                ]),
+              ])
+            );
+          });
+          misconceptionCard.appendChild(misList);
+        }
+
+        wrapper.appendChild(misconceptionCard);
+
+	        content.innerHTML = "";
+	        content.appendChild(wrapper);
       }
 
    async function renderTeacherClasses() {
@@ -6869,7 +7618,7 @@ updateCustomLabel();
 function openQuestionPicker() {
   const overlay = createEl(
     "div",
-    "fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+    "fixed inset-0 z-50 hidden items-center justify-center bg-black/40",
     []
   );
   const panel = createEl(
@@ -6888,16 +7637,22 @@ function openQuestionPicker() {
       "Pick questions",
     ])
   );
+  const pickerTitle = header.querySelector("h3");
+  if (pickerTitle && !pickerTitle.id) pickerTitle.id = "question-picker-title";
+
+  function closePicker() {
+    TeacherDraftQuestionSet.set(currentCustomQuestionIds);
+    updateCustomLabel();
+    ModalManager.close({ overlay });
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+
   const closeBtn = createEl(
     "button",
     "text-sm text-gray-500 hover:text-gray-900 focus:outline-none",
     ["Close"]
   );
-  closeBtn.addEventListener("click", () => {
-  TeacherDraftQuestionSet.set(currentCustomQuestionIds);
-  updateCustomLabel();
-  document.body.removeChild(overlay);
-});
+  closeBtn.addEventListener("click", closePicker);
   header.appendChild(closeBtn);
   panel.appendChild(header);
 
@@ -6923,11 +7678,7 @@ function openQuestionPicker() {
     "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
     ["Done"]
   );
-  doneBtn.addEventListener("click", () => {
-  TeacherDraftQuestionSet.set(currentCustomQuestionIds);
-  updateCustomLabel();
-  document.body.removeChild(overlay);
-});
+  doneBtn.addEventListener("click", closePicker);
   const clearBtn = createEl(
     "button",
     "px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500",
@@ -6959,6 +7710,13 @@ function openQuestionPicker() {
 
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
+  ModalManager.open({
+    overlay,
+    dialog: panel,
+    titleEl: pickerTitle,
+    closeFn: closePicker,
+    focusFirstEl: closeBtn,
+  });
 
   let allQuestions = [];
   let unitSelect, skillSelect, standardSelect, diffSelect;
@@ -7076,6 +7834,19 @@ q.difficulty ? " · " + formatDifficultyLabel(q.difficulty) : ""
       ]);
 
       row.appendChild(text);
+
+      const previewBtn = createEl(
+        "button",
+        "px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50",
+        ["👁 Preview"]
+      );
+      previewBtn.type = "button";
+      previewBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openPreviewModal(q);
+      });
+      row.appendChild(previewBtn);
 
 // ✅ NEW: smart hover preview (auto-flips up/down)
 attachSmartHoverPreview(row, q);
@@ -8921,6 +9692,7 @@ function renderAssignmentStatusDetail(
       function renderTabs() {
         const strip = $("tab-strip");
         if (!strip) return;
+        strip.setAttribute("role", "tablist");
         const tabs = TABS_BY_ROLE[AppState.role] || [];
         if (!tabs.length) {
           strip.innerHTML = "";
@@ -8947,10 +9719,28 @@ function renderAssignmentStatusDetail(
             btn.className =
               "flex-1 px-3 py-1.5 rounded-lg text-sm border border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500";
           }
+          btn.setAttribute("role", "tab");
+          btn.setAttribute("aria-selected", isActive ? "true" : "false");
+          btn.setAttribute("tabindex", isActive ? "0" : "-1");
+          btn.setAttribute("aria-controls", "tab-content");
           btn.addEventListener("click", () => {
             AppState.currentTab = tab.id;
             renderTabs();
             renderCurrentTab();
+          });
+          btn.addEventListener("keydown", (e) => {
+            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+
+            const tabEls = Array.from(strip.querySelectorAll("[role='tab']"));
+            const idx = tabEls.indexOf(btn);
+            const nextIdx =
+              e.key === "ArrowRight"
+                ? (idx + 1) % tabEls.length
+                : (idx - 1 + tabEls.length) % tabEls.length;
+
+            e.preventDefault();
+            tabEls[nextIdx].click();
+            tabEls[nextIdx].focus();
           });
           strip.appendChild(btn);
         });
