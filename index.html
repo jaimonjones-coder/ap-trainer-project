@@ -94,6 +94,7 @@ body.app-mode #right-column {
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.3.2/dist/purify.min.js"></script>
   </head>
 <body class="min-h-screen bg-gray-50">
   <div id="page-shell" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -184,16 +185,21 @@ body.app-mode #right-column {
                 type="radio"
                 name="auth-mode"
                 value="login"
+                id="auth-mode-login"
                 checked
                 class="h-3 w-3 text-blue-600 border-gray-300"
               />
               <span>Log in</span>
             </label>
-            <label class="inline-flex items-center gap-1 cursor-pointer">
+            <label
+              id="auth-mode-signup-wrap"
+              class="inline-flex items-center gap-1 cursor-pointer"
+            >
               <input
                 type="radio"
                 name="auth-mode"
                 value="signup"
+                id="auth-mode-signup"
                 class="h-3 w-3 text-blue-600 border-gray-300"
               />
               <span>Create account</span>
@@ -731,12 +737,47 @@ function buildQuestionHoverPreview(q, { align = "left" } = {}) {
 
   return preview;
 }
-function createElHTML(tag, className = "", html = "") {
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function sanitizeRichMarkup(html, { profile = "html" } = {}) {
+  const dirty = typeof html === "string" ? html : String(html ?? "");
+  if (!dirty) return "";
+
+  if (!window.DOMPurify || typeof window.DOMPurify.sanitize !== "function") {
+    console.warn("DOMPurify is not loaded; falling back to escaped text.");
+    return escapeHTML(dirty);
+  }
+
+  if (profile === "svg") {
+    return window.DOMPurify.sanitize(dirty, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+    });
+  }
+
+  if (profile === "html") {
+    return window.DOMPurify.sanitize(dirty, {
+      USE_PROFILES: { html: true },
+    });
+  }
+
+  return window.DOMPurify.sanitize(dirty);
+}
+
+function createElHTML(tag, className = "", html = "", { profile = "html" } = {}) {
   const el = document.createElement(tag);
   if (className) el.className = className;
+
   if (html != null) {
-    el.innerHTML = html;
+    el.innerHTML = sanitizeRichMarkup(html, { profile });
   }
+
   return el;
 }
 
@@ -749,20 +790,28 @@ function hasInlineSvgMarkup(text) {
 
 function appendQuestionStem(el, stemText, className = "") {
   if (!el) return;
+
   const safeClass = className || "text-gray-900";
-  if (hasInlineSvgMarkup(stemText)) {
-    el.appendChild(createElHTML("div", safeClass, stemText));
+  const stem = typeof stemText === "string" ? stemText : String(stemText ?? "");
+
+  if (hasInlineSvgMarkup(stem)) {
+    el.appendChild(
+      createElHTML("div", safeClass, stem, { profile: "mixed" })
+    );
   } else {
-    el.appendChild(createEl("div", safeClass, [stemText || "(no text)"]));
+    el.appendChild(createEl("div", safeClass, [stem || "(no text)"]));
   }
 }
 
 function getQuestionVisualPayload(q) {
   if (!q) return { svgMarkup: "", imageUrl: "" };
+
   const svgMarkup =
     q.svgMarkup || q.svg || q.imageSvg || q.diagramSvg || q.mediaSvg || "";
+
   const imageUrl =
     q.imageUrl || q.image || q.imageSrc || q.mediaUrl || q.diagramUrl || "";
+
   return {
     svgMarkup: typeof svgMarkup === "string" ? svgMarkup : "",
     imageUrl: typeof imageUrl === "string" ? imageUrl : "",
@@ -771,6 +820,7 @@ function getQuestionVisualPayload(q) {
 
 function appendQuestionVisual(el, q, className = "mt-2") {
   if (!el) return;
+
   const media = getQuestionVisualPayload(q);
 
   if (hasInlineSvgMarkup(media.svgMarkup)) {
@@ -778,7 +828,8 @@ function appendQuestionVisual(el, q, className = "mt-2") {
       createElHTML(
         "div",
         `${className} rounded-lg border border-gray-200 bg-gray-50 p-2 overflow-x-auto`,
-        media.svgMarkup
+        media.svgMarkup,
+        { profile: "svg" }
       )
     );
     return;
@@ -4428,13 +4479,14 @@ if (ENABLE_COPY_GUARD && quiz.mode === "assignment") {
   qCard.addEventListener("copy", (e) => e.preventDefault());
   qCard.addEventListener("cut", (e) => e.preventDefault());
 }
-  qCard.appendChild(
-    createElHTML(
-      "p",
-      "text-base md:text-lg font-semibold text-gray-900 leading-relaxed",
-      q.question || ""
-    )
+  const questionStemEl = createEl(
+    "div",
+    "text-base md:text-lg font-semibold text-gray-900 leading-relaxed",
+    []
   );
+  appendQuestionStem(questionStemEl, q.question || "");
+  qCard.appendChild(questionStemEl);
+  appendQuestionVisual(qCard, q, "mt-1");
 
   const list = createEl("div", "space-y-1", []);
   q.options.forEach((opt, idx) => {
@@ -4448,7 +4500,7 @@ if (ENABLE_COPY_GUARD && quiz.mode === "assignment") {
       []
     );
 
-    btn.innerHTML = opt || "";
+    btn.textContent = opt == null ? "" : String(opt);
 
         btn.addEventListener("click", () => {
       quiz.answers[quiz.index] = idx;
@@ -9821,16 +9873,34 @@ function renderAssignmentStatusDetail(
         }
       }
 
+      function updateAuthModeUI() {
+        const signupWrap = $("auth-mode-signup-wrap");
+        const signupRadio = $("auth-mode-signup");
+        const loginRadio = $("auth-mode-login");
+        if (!signupWrap || !signupRadio || !loginRadio) return;
+
+        const isTeacher = AppState.role === "teacher";
+        signupWrap.classList.toggle("hidden", isTeacher);
+
+        if (isTeacher) {
+          signupRadio.checked = false;
+          loginRadio.checked = true;
+        }
+      }
+
       // Role toggles
       $("role-student").addEventListener("click", () => {
         AppState.role = "student";
         updateRoleToggleUI();
+        updateAuthModeUI();
       });
       $("role-teacher").addEventListener("click", () => {
         AppState.role = "teacher";
         updateRoleToggleUI();
+        updateAuthModeUI();
       });
       updateRoleToggleUI();
+      updateAuthModeUI();
 
       // Auth form
       $("auth-form").addEventListener("submit", async (e) => {
@@ -9846,6 +9916,9 @@ function renderAssignmentStatusDetail(
 
         try {
           let cred;
+          if (AppState.role === "teacher" && mode === "signup") {
+            throw new Error("Teacher account creation is disabled here. Please sign in.");
+          }
           if (mode === "signup") {
             cred = await auth.createUserWithEmailAndPassword(email, password);
             await DataManager.upsertUserProfile(cred.user.uid, {
