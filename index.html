@@ -236,7 +236,7 @@ body.app-mode #right-column {
     Continue
   </button>
 </form>
-          
+       
 
          
         </div>
@@ -423,6 +423,12 @@ body.app-mode #right-column {
       }
       const auth = firebase.auth();
       const db = firebase.firestore();
+
+      // ---------------- Practice-only student mode ----------------
+      // Option A: students do not log in. They can only read active questions
+      // from Firestore and complete no-account practice in the browser.
+      const PRACTICE_ONLY_STUDENT_MODE = true;
+      let teacherLoginRequested = false;
 // Enable offline persistence (Firestore v8 style)
 if (db && db.enablePersistence) {
   db.enablePersistence().catch(function (err) {
@@ -1827,11 +1833,7 @@ const LiveData = {
 };
       const TABS_BY_ROLE = {
         student: [
-          { id: "dashboard", label: "Dashboard" },
-          { id: "classes", label: "Classes" },
-          { id: "assignments", label: "Assignments" },
           { id: "practice", label: "Practice" },
-          { id: "analytics", label: "Analytics" },
         ],
         teacher: [
   { id: "dashboard", label: "Dashboard" },
@@ -2190,6 +2192,11 @@ async getQuestions(filter = {}) {
   }
 
   let ref = db.collection("questions");
+
+  // No-login student mode reads only the published/active question bank.
+  // Firestore security rules should match this constraint.
+  if (!isTeacherMode) ref = ref.where("status", "==", "active");
+
   if (unit != null && unit !== "") ref = ref.where("unit", "==", Number(unit));
   if (skill != null && String(skill).trim() !== "")
     ref = ref.where("skill", "==", String(skill).trim());
@@ -2745,7 +2752,7 @@ const TeacherGradesState = {
   selectedClassId: null,
 };
 
-const ENABLE_COPY_GUARD = true;
+const ENABLE_COPY_GUARD = false;
 
 function ensureStudentProgressModalEvents() {
   const overlay = $("student-progress-overlay");
@@ -3847,11 +3854,7 @@ async pruneOrphanedCards(userId) {
 
      // ---------------- Practice + Quiz Engine ----------------
 async function startFullExam() {
-  const userId = AppState.user?.uid;
-  if (!userId) {
-    Toast.show("Please sign in to start the full exam.", "info");
-    return;
-  }
+  const userId = AppState.user?.uid || null;
 
   try {
     let questions = await QuestionService.getQuestions();
@@ -4002,8 +4005,17 @@ function launchSRFromAnalytics() {
   renderCurrentTab();
 }
 async function startPractice({ mode, unit, limit, skill }) {
-  const userId = AppState.user.uid;
+  const userId = AppState.user?.uid || null;
   let questions = [];
+
+  if (!userId && ["sr", "mistakes", "starred"].includes(mode)) {
+    Toast.show(
+      "This no-login version does not save progress. Use unit, skill, smart mixed, timed, or full exam practice.",
+      "info"
+    );
+    return;
+  }
+
   try {
 if (mode === "sr") {
   // Spaced repetition due cards
@@ -4101,6 +4113,12 @@ else if (mode === "unit") {
   /* === /PRACTICE_RANDOMIZATION: UNIT === */
 
     } else if (mode === "smart") {
+      if (!userId) {
+        questions = shuffleCopy(await QuestionService.getQuestions());
+        if (limit && questions.length > limit) {
+          questions = questions.slice(0, limit);
+        }
+      } else {
      // Smart mixed practice: SR + weakest units
 const dueSR = await SpacedRepetition.getDueQuestions(userId, 10);
 const idsSR = dueSR.map((d) => d.id);
@@ -4156,6 +4174,7 @@ let combined = [...srQs, ...weakQuestions];
         questions = questions
           .sort(() => Math.random() - 0.5)
           .slice(0, limit);
+      }
       }
     } else if (mode === "mistakes") {
       // Build practice set from questions you've missed
@@ -4231,7 +4250,8 @@ let combined = [...srQs, ...weakQuestions];
         questionCount,
         timeLimitMinutes,
       }) {
-        const userId = AppState.user.uid;
+        const userId = AppState.user?.uid || null;
+        if (!userId && unitMode === "weak") unitMode = "all";
         let questions = [];
         try {
           if (unitMode === "all") {
@@ -4422,7 +4442,7 @@ function renderQuiz() {
       saveBtn.textContent = originalText;
     }
   });
-  right.appendChild(saveBtn);
+  if (AppState.user) right.appendChild(saveBtn);
   // Timer (if any)
   if (quiz.timeLimitMinutes) {
     const timerEl = createEl("span", "font-mono", [""]);
@@ -6126,13 +6146,21 @@ const units =
       // ---------------- Practice Panel ----------------
       function renderPracticePanel() {
         const wrapper = createEl("div", "space-y-4", []);
-        if (!AppState.user) {
+        if (!AppState.user && !PRACTICE_ONLY_STUDENT_MODE) {
           wrapper.appendChild(
             createEl("p", "text-sm text-gray-500", [
               "Please sign in to start practice.",
             ])
           );
           return wrapper;
+        }
+
+        if (!AppState.user && PRACTICE_ONLY_STUDENT_MODE) {
+          wrapper.appendChild(
+            createEl("div", "rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900", [
+              "Practice-only mode: no student login, no saved student progress, and no student data is written. Results stay on this device only while the page is open."
+            ])
+          );
         }
 
         wrapper.appendChild(
@@ -6469,8 +6497,16 @@ const countInput = createEl(
           );
           card.appendChild(statsLine);
 
-          SpacedRepetition.getStats(AppState.user.uid)
+          (AppState.user
+            ? SpacedRepetition.getStats(AppState.user.uid)
+            : Promise.resolve({ disabledNoLogin: true })
+          )
             .then((stats) => {
+              if (stats.disabledNoLogin) {
+                statsLine.textContent =
+                  "Disabled in no-login practice mode because progress is not saved.";
+                return;
+              }
               statsLine.textContent = `Total cards: ${
                 stats.totalCards || 0
               } · Due now: ${stats.dueNow || 0} · Due soon: ${
@@ -9846,6 +9882,65 @@ function renderAssignmentStatusDetail(
   document.body.classList.toggle("app-mode", !!show);
 }
 
+      function refreshTopBarMode() {
+        updateRolePill();
+        const subtitle = $("user-subtitle");
+        if (subtitle) {
+          if (AppState.role === "teacher") subtitle.textContent = "Teacher mode";
+          else subtitle.textContent = "Practice mode · no student login";
+        }
+
+        const logoutBtn = $("logout-btn");
+        if (logoutBtn) {
+          logoutBtn.textContent =
+            PRACTICE_ONLY_STUDENT_MODE && AppState.role === "student" && !AppState.user
+              ? "Teacher login"
+              : "Log out";
+        }
+
+        if (PRACTICE_ONLY_STUDENT_MODE && AppState.role === "student" && !AppState.user) {
+          SyncUI.set("live", "Practice only");
+        }
+      }
+
+      function enterGuestPracticeMode() {
+        LiveData.stop();
+        AppState.user = null;
+        AppState.role = "student";
+        AppState.currentQuiz = null;
+        AppState.currentTab = "practice";
+        AppState.practiceResults = null;
+        teacherLoginRequested = false;
+        showAppView(true);
+        renderTabs();
+        refreshTopBarMode();
+        renderCurrentTab();
+      }
+
+      function showTeacherLogin() {
+        teacherLoginRequested = true;
+        AppState.user = null;
+        AppState.role = "teacher";
+        AppState.currentQuiz = null;
+        AppState.currentTab = null;
+        updateRoleToggleUI();
+        updateAuthModeUI();
+        showAppView(false);
+        const emailInput = $("auth-email");
+        if (emailInput) setTimeout(() => emailInput.focus(), 0);
+      }
+
+      function configurePracticeOnlyAuthUI() {
+        if (!PRACTICE_ONLY_STUDENT_MODE) return;
+        const studentBtn = $("role-student");
+        const teacherBtn = $("role-teacher");
+        if (studentBtn) studentBtn.classList.add("hidden");
+        if (teacherBtn) teacherBtn.textContent = "Teacher";
+        AppState.role = "teacher";
+        updateRoleToggleUI();
+        updateAuthModeUI();
+      }
+
       function updateRoleToggleUI() {
         const studentBtn = $("role-student");
         const teacherBtn = $("role-teacher");
@@ -9861,6 +9956,11 @@ function renderAssignmentStatusDetail(
           teacherBtn.className =
             "flex-1 px-3 py-1.5 rounded-full text-gray-500 font-medium";
         }
+
+        if (PRACTICE_ONLY_STUDENT_MODE) {
+          studentBtn.classList.add("hidden");
+          teacherBtn.classList.add("w-full");
+        }
       }
 
       function updateRolePill() {
@@ -9869,7 +9969,7 @@ function renderAssignmentStatusDetail(
         const spans = pill.querySelectorAll("span");
         if (spans[1]) {
           spans[1].textContent =
-            AppState.role === "teacher" ? "Teacher" : "Student";
+            AppState.role === "teacher" ? "Teacher" : "Practice";
         }
       }
 
@@ -9879,7 +9979,7 @@ function renderAssignmentStatusDetail(
         const loginRadio = $("auth-mode-login");
         if (!signupWrap || !signupRadio || !loginRadio) return;
 
-        const isTeacher = AppState.role === "teacher";
+        const isTeacher = AppState.role === "teacher" || PRACTICE_ONLY_STUDENT_MODE;
         signupWrap.classList.toggle("hidden", isTeacher);
 
         if (isTeacher) {
@@ -9890,6 +9990,7 @@ function renderAssignmentStatusDetail(
 
       // Role toggles
       $("role-student").addEventListener("click", () => {
+        if (PRACTICE_ONLY_STUDENT_MODE) return;
         AppState.role = "student";
         updateRoleToggleUI();
         updateAuthModeUI();
@@ -9940,8 +10041,13 @@ function renderAssignmentStatusDetail(
      
 $("logout-btn").addEventListener("click", async () => {
   try {
+    if (PRACTICE_ONLY_STUDENT_MODE && AppState.role === "student" && !AppState.user) {
+      showTeacherLogin();
+      return;
+    }
     LiveData.stop(); // ✅ stop immediately
     await auth.signOut();
+    if (PRACTICE_ONLY_STUDENT_MODE) enterGuestPracticeMode();
   } catch (e) {
     console.error(e);
   }
@@ -9953,7 +10059,11 @@ auth.onAuthStateChanged(async (user) => {
     LiveData.stop(); // ✅ stop listeners on sign-out
     AppState.user = null;
     AppState.currentQuiz = null;
-    showAppView(false);
+    if (PRACTICE_ONLY_STUDENT_MODE && !teacherLoginRequested) {
+      enterGuestPracticeMode();
+    } else {
+      showAppView(false);
+    }
     return;
   }
 
@@ -9974,25 +10084,45 @@ auth.onAuthStateChanged(async (user) => {
   }
 
   AppState.role = profile && profile.role === "teacher" ? "teacher" : "student";
+
+  if (PRACTICE_ONLY_STUDENT_MODE && AppState.role !== "teacher") {
+    teacherLoginRequested = true;
+    await auth.signOut();
+    const errEl = $("auth-error");
+    if (errEl) {
+      errEl.textContent = "Teacher access required. Students use no-login practice mode.";
+      errEl.classList.remove("hidden");
+    }
+    showAppView(false);
+    return;
+  }
+
   updateRolePill();
 
   LiveData.start(user.uid, AppState.role); // ✅ start listeners after role is known
 
   const subtitle = $("user-subtitle");
   if (subtitle) {
-  const modeLabel = `${AppState.role === "teacher" ? "Teacher" : "Student"} mode`;
+  const modeLabel = `${AppState.role === "teacher" ? "Teacher" : "Practice"} mode`;
   subtitle.textContent = modeLabel;
 
 }
 
+  teacherLoginRequested = false;
   showAppView(true);
   renderTabs();
+  refreshTopBarMode();
   renderCurrentTab();
 });
      
 
       // Initial state
-      showAppView(false);
+      configurePracticeOnlyAuthUI();
+      if (PRACTICE_ONLY_STUDENT_MODE) {
+        enterGuestPracticeMode();
+      } else {
+        showAppView(false);
+      }
     </script>
   </body>
 </html>
