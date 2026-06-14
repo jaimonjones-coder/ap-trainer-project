@@ -3,7 +3,7 @@
 <html lang="en">
  <head>
   <meta charset="UTF-8" />
-  <title>Eduvate · AP Psychology Trainer</title>
+  <title>Eduvate · AP Psychology Review Trainer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -114,16 +114,16 @@ body.app-mode #right-column {
             class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-medium text-blue-700 mb-4"
           >
             <span class="h-1.5 w-1.5 rounded-full bg-green-500 mr-2"></span>
-            Eduvate · AP Psychology Coach
+            Eduvate · AP Psychology Review
           </div>
           <h1 class="text-2xl md:text-3xl font-semibold leading-tight">
-            The Personal Trainer<br />
-            for AP® Psychology
+            AP® Psychology Review<br />
+            with No Student Login
           </h1>
           <p class="text-xs md:text-sm text-gray-600 max-w-md leading-relaxed">
-            Smart mixed practice, spaced repetition, and real-time class
-            analytics in one lightweight web app. Designed for teachers and
-            students getting ready for the AP exam.
+            Students answer AP-style questions without creating accounts.
+            Scores and responses are shown on screen only and are not saved
+            to a student profile.
           </p>
 
           <div class="mt-6 grid grid-cols-3 gap-3 text-sm">
@@ -132,18 +132,18 @@ body.app-mode #right-column {
               <p class="text-gray-900 font-semibold mt-1">Units 1–9</p>
             </div>
             <div class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
-              <p class="text-gray-500">Smart practice</p>
-              <p class="text-gray-900 font-semibold mt-1">Weak units + SR</p>
+              <p class="text-gray-500">No account</p>
+              <p class="text-gray-900 font-semibold mt-1">Open and answer</p>
             </div>
             <div class="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
-              <p class="text-gray-500">Analytics</p>
-              <p class="text-gray-900 font-semibold mt-1">Class dashboards</p>
+              <p class="text-gray-500">Student data</p>
+              <p class="text-gray-900 font-semibold mt-1">Not collected</p>
             </div>
           </div>
         </div>
 
         <div class="relative z-10 mt-6 text-sm text-gray-500">
-  Built for teachers and students
+  Built for low-setup, privacy-conscious classroom review
 </div>
       </div>
 
@@ -247,7 +247,7 @@ body.app-mode #right-column {
           <div class="flex items-center justify-between mb-3 text-sm">
             <div>
               <p class="text-xs font-semibold text-gray-900">
-                AP Psychology Trainer
+                AP Psychology Review Trainer
               </p>
               <p id="user-subtitle" class="text-sm text-gray-500"></p>
             </div>
@@ -1833,7 +1833,7 @@ const LiveData = {
 };
       const TABS_BY_ROLE = {
         student: [
-          { id: "practice", label: "Practice" },
+          { id: "practice", label: "Review" },
         ],
         teacher: [
   { id: "dashboard", label: "Dashboard" },
@@ -4022,7 +4022,7 @@ if (mode === "sr") {
   let dueSR = await SpacedRepetition.getDueQuestions(userId, 20);
 
   if (!dueSR.length) {
-    Toast.show("No SR cards due. Try smart practice instead.", "info");
+    Toast.show("No saved review cards are available. Choose a unit or mixed review instead.", "info");
     return;
   }
 
@@ -4054,7 +4054,7 @@ if (mode === "sr") {
     // Retry after cleanup
     dueSR = await SpacedRepetition.getDueQuestions(userId, 20);
     if (!dueSR.length) {
-      Toast.show("No SR cards due. Try smart practice instead.", "info");
+      Toast.show("No saved review cards are available. Choose a unit or mixed review instead.", "info");
       return;
     }
 
@@ -4658,7 +4658,7 @@ function renderQuizResultsScreen(results) {
   // Top bar with a back button
   const top = createEl("div", "flex items-center justify-between", []);
   const backLabel =
-    results.mode === "assignment" ? "Back to assignments" : "Back to practice";
+    results.mode === "assignment" ? "Back to assignments" : "Back to review options";
 
   const backBtn = createEl(
     "button",
@@ -4681,7 +4681,7 @@ function renderQuizResultsScreen(results) {
   const title =
     results.mode === "assignment"
       ? `Results${results.assignmentTitle ? ` • ${results.assignmentTitle}` : ""}`
-      : "Practice Results";
+      : "Review Results";
 
   wrapper.appendChild(createEl("h2", "text-xl font-semibold", [title]));
 
@@ -6146,31 +6146,42 @@ const units =
       // ---------------- Practice Panel ----------------
       function renderPracticePanel() {
         const wrapper = createEl("div", "space-y-4", []);
+
         if (!AppState.user && !PRACTICE_ONLY_STUDENT_MODE) {
           wrapper.appendChild(
             createEl("p", "text-sm text-gray-500", [
-              "Please sign in to start practice.",
+              "Please sign in to begin.",
             ])
           );
           return wrapper;
         }
 
+        // Student-facing assurance: clear, direct, and action-based.
         if (!AppState.user && PRACTICE_ONLY_STUDENT_MODE) {
-          wrapper.appendChild(
-            createEl("div", "rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900", [
-              "Practice-only mode: no student login, no saved student progress, and no student data is written. Results stay on this device only while the page is open."
+          const assurance = createEl(
+            "div",
+            "rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950 space-y-2",
+            []
+          );
+          assurance.appendChild(
+            createEl("p", "font-semibold", ["No account needed. No student data collected."])
+          );
+          assurance.appendChild(
+            createEl("p", "text-blue-900", [
+              "Students can answer questions and view results without signing in. The app does not save student names, accounts, scores, answers, or progress. Results stay only in this browser tab until the page is refreshed or closed.",
             ])
           );
+          wrapper.appendChild(assurance);
         }
 
         wrapper.appendChild(
           createEl("div", "flex items-center justify-between", [
             createEl("div", "", [
               createEl("h2", "text-sm font-semibold text-gray-900", [
-                "Practice modes",
+                "Choose a review set",
               ]),
               createEl("p", "text-sm text-gray-600", [
-                "Mix targeted unit work, smart practice, spaced repetition, and timed drills.",
+                "Pick a unit, skill, mixed set, timed set, or full exam simulation. Nothing is saved to a student profile.",
               ]),
             ]),
           ])
@@ -6182,7 +6193,7 @@ const units =
           []
         );
 
-        // Unit practice
+        // Unit review
         (function () {
           const card = createEl(
             "div",
@@ -6190,37 +6201,31 @@ const units =
             []
           );
           card.appendChild(
-            createEl("p", "text-xs font-semibold text-gray-900", [
-              "Unit practice",
-            ])
+            createEl("p", "text-xs font-semibold text-gray-900", ["Unit review"])
           );
           card.appendChild(
             createEl("p", "text-sm text-gray-600", [
-              "Pick a single AP Psychology unit and run a focused practice set.",
+              "Choose one AP Psychology unit and answer a focused set of questions.",
             ])
           );
 
-const row1 = createEl(
-  "div",
-  "flex items-center gap-2 text-xs",
-  []
-);
-const unitSelect = createEl(
-  "select",
-  "flex-1 max-w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs truncate focus:outline-none focus:ring-1 focus:ring-blue-500",
-  []
-);
-   AP_UNITS.forEach((label, idx) => {
-  const opt = document.createElement("option");
-  opt.value = String(idx + 1);
-  opt.textContent = `Unit ${idx + 1}: ${label}`;
-  unitSelect.appendChild(opt);
-});
-const countInput = createEl(
-  "input",
-  "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
-  []
-);          
+          const row1 = createEl("div", "flex items-center gap-2 text-xs", []);
+          const unitSelect = createEl(
+            "select",
+            "flex-1 max-w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs truncate focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          AP_UNITS.forEach((label, idx) => {
+            const opt = document.createElement("option");
+            opt.value = String(idx + 1);
+            opt.textContent = `Unit ${idx + 1}: ${label}`;
+            unitSelect.appendChild(opt);
+          });
+          const countInput = createEl(
+            "input",
+            "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
           countInput.type = "number";
           countInput.min = "5";
           countInput.max = "50";
@@ -6232,7 +6237,7 @@ const countInput = createEl(
           const btn = createEl(
             "button",
             "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-            ["Start unit practice"]
+            ["Begin unit review"]
           );
           btn.addEventListener("click", () => {
             const unit = Number(unitSelect.value || 1);
@@ -6242,105 +6247,8 @@ const countInput = createEl(
           card.appendChild(btn);
           grid.appendChild(card);
         })();
-// Skill focus practice
-(function () {
-  const card = createEl(
-    "div",
-    "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
-    []
-  );
 
-  card.appendChild(
-    createEl("p", "text-xs font-semibold text-gray-900", ["Skill focus"])
-  );
-
-  card.appendChild(
-    createEl("p", "text-sm text-gray-600", [
-      "Practice questions from a single skill (great for targeting weak areas).",
-    ])
-  );
-
-  const row = createEl("div", "flex items-center gap-2 text-xs", []);
-
-  const skillSelect = createEl(
-    "select",
-    "flex-1 max-w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs truncate focus:outline-none focus:ring-1 focus:ring-blue-500",
-    []
-  );
-
-  // initial loading state
-  const loadingOpt = document.createElement("option");
-  loadingOpt.value = "";
-  loadingOpt.textContent = "Loading skills…";
-  skillSelect.appendChild(loadingOpt);
-  skillSelect.disabled = true;
-
-  const countInput = createEl(
-    "input",
-    "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
-    []
-  );
-  countInput.type = "number";
-  countInput.min = "5";
-  countInput.max = "50";
-  countInput.value = "10";
-
-  row.appendChild(skillSelect);
-  row.appendChild(countInput);
-  card.appendChild(row);
-
-  const btn = createEl(
-    "button",
-    "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-    ["Start skill practice"]
-  );
-
-  btn.addEventListener("click", () => {
-    const skill = String(skillSelect.value || "").trim();
-    const limit = Number(countInput.value || 10);
-    startPractice({ mode: "skill", skill, limit });
-  });
-
-  card.appendChild(btn);
-  grid.appendChild(card);
-
-  // Populate skills asynchronously (from question bank)
-  (async () => {
-    try {
-      const all = await QuestionService.getQuestions({ limit: 75 }); // ✅ don't read entire bank
-      const skills = Array.from(
-        new Set((all || []).map((q) => String(q.skill || "").trim()).filter(Boolean))
-      ).sort((a, b) => a.localeCompare(b));
-
-      skillSelect.innerHTML = "";
-
-      const placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = skills.length ? "Select a skill" : "No skills found";
-      skillSelect.appendChild(placeholder);
-
-      skills.forEach((s) => {
-        const opt = document.createElement("option");
-        opt.value = s;
-        opt.textContent = s;
-        skillSelect.appendChild(opt);
-      });
-
-      skillSelect.disabled = skills.length === 0;
-      btn.disabled = skills.length === 0;
-    } catch (e) {
-      console.error("Skill list load error", e);
-      skillSelect.innerHTML = "";
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = "Unable to load skills";
-      skillSelect.appendChild(opt);
-      skillSelect.disabled = true;
-      btn.disabled = true;
-    }
-  })();
-})();
-        // Smart mixed practice
+        // Skill focus
         (function () {
           const card = createEl(
             "div",
@@ -6348,13 +6256,103 @@ const countInput = createEl(
             []
           );
           card.appendChild(
-            createEl("p", "text-xs font-semibold text-gray-900", [
-              "Smart mixed practice",
-            ])
+            createEl("p", "text-xs font-semibold text-gray-900", ["Skill focus"])
           );
           card.appendChild(
             createEl("p", "text-sm text-gray-600", [
-              "Blends spaced repetition cards with your weakest units.",
+              "Choose one skill from the active question bank.",
+            ])
+          );
+
+          const row = createEl("div", "flex items-center gap-2 text-xs", []);
+          const skillSelect = createEl(
+            "select",
+            "flex-1 max-w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs truncate focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          const loadingOpt = document.createElement("option");
+          loadingOpt.value = "";
+          loadingOpt.textContent = "Loading skills…";
+          skillSelect.appendChild(loadingOpt);
+          skillSelect.disabled = true;
+
+          const countInput = createEl(
+            "input",
+            "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          countInput.type = "number";
+          countInput.min = "5";
+          countInput.max = "50";
+          countInput.value = "10";
+
+          row.appendChild(skillSelect);
+          row.appendChild(countInput);
+          card.appendChild(row);
+
+          const btn = createEl(
+            "button",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Begin skill review"]
+          );
+          btn.disabled = true;
+          btn.addEventListener("click", () => {
+            const skill = String(skillSelect.value || "").trim();
+            const limit = Number(countInput.value || 10);
+            startPractice({ mode: "skill", skill, limit });
+          });
+
+          card.appendChild(btn);
+          grid.appendChild(card);
+
+          (async () => {
+            try {
+              const all = await QuestionService.getQuestions({ limit: 75 });
+              const skills = Array.from(
+                new Set((all || []).map((q) => String(q.skill || "").trim()).filter(Boolean))
+              ).sort((a, b) => a.localeCompare(b));
+
+              skillSelect.innerHTML = "";
+              const placeholder = document.createElement("option");
+              placeholder.value = "";
+              placeholder.textContent = skills.length ? "Select a skill" : "No skills found";
+              skillSelect.appendChild(placeholder);
+
+              skills.forEach((s) => {
+                const opt = document.createElement("option");
+                opt.value = s;
+                opt.textContent = s;
+                skillSelect.appendChild(opt);
+              });
+
+              skillSelect.disabled = skills.length === 0;
+              btn.disabled = skills.length === 0;
+            } catch (e) {
+              console.error("Skill list load error", e);
+              skillSelect.innerHTML = "";
+              const opt = document.createElement("option");
+              opt.value = "";
+              opt.textContent = "Unable to load skills";
+              skillSelect.appendChild(opt);
+              skillSelect.disabled = true;
+              btn.disabled = true;
+            }
+          })();
+        })();
+
+        // Mixed review
+        (function () {
+          const card = createEl(
+            "div",
+            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
+            []
+          );
+          card.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", ["Mixed review"])
+          );
+          card.appendChild(
+            createEl("p", "text-sm text-gray-600", [
+              "Randomly mixes active AP Psychology questions. No saved history is used.",
             ])
           );
 
@@ -6368,31 +6366,25 @@ const countInput = createEl(
           countInput.max = "30";
           countInput.value = "10";
 
-          const row = createEl(
-            "div",
-            "flex items-center gap-2 text-sm",
-            []
-          );
-          row.appendChild(
-            createEl("span", "text-sm text-gray-600", ["Questions:"])
-          );
+          const row = createEl("div", "flex items-center gap-2 text-sm", []);
+          row.appendChild(createEl("span", "text-sm text-gray-600", ["Questions:"]));
           row.appendChild(countInput);
           card.appendChild(row);
 
           const btn = createEl(
             "button",
             "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-            ["Start smart set"]
+            ["Begin mixed review"]
           );
           btn.addEventListener("click", () => {
             const limit = Number(countInput.value || 10);
             startPractice({ mode: "smart", limit });
           });
           card.appendChild(btn);
-
           grid.appendChild(card);
         })();
-        // Full MC exam simulation
+
+        // Timed review
         (function () {
           const card = createEl(
             "div",
@@ -6400,290 +6392,97 @@ const countInput = createEl(
             []
           );
           card.appendChild(
-            createEl("p", "text-xs font-semibold text-gray-900", [
-              "Full MC exam",
-            ])
+            createEl("p", "text-xs font-semibold text-gray-900", ["Timed review"])
           );
           card.appendChild(
             createEl("p", "text-sm text-gray-600", [
-              "Simulate the full AP Psychology MC section (75 questions, 90 minutes, one pass).",
+              "Run a timed question set without saving student responses or scores.",
             ])
           );
 
-          const btn = createEl(
-            "button",
-            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-            ["Start full exam"]
-          );
-          btn.addEventListener("click", () => {
-            startFullExam();
-          });
-          card.appendChild(btn);
-
-          grid.appendChild(card);
-        })();
-        // Practice from mistakes
-(function () {
-  const card = createEl(
-    "div",
-    "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
-    []
-  );
-  card.appendChild(
-    createEl("p", "text-xs font-semibold text-gray-900", [
-      "Practice from my mistakes",
-    ])
-  );
-  card.appendChild(
-    createEl("p", "text-sm text-gray-600", [
-      "Build a practice set from questions you've missed in past assignments.",
-    ])
-  );
-
-  const row = createEl("div", "flex items-center gap-2 text-sm", []);
-  row.appendChild(
-    createEl("span", "text-sm text-gray-600", ["Questions:"])
-  );
-  const countInput = createEl(
-    "input",
-    "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm",
-    []
-  );
-  countInput.type = "number";
-  countInput.min = "5";
-  countInput.max = "30";
-  countInput.value = "10";
-  row.appendChild(countInput);
-  card.appendChild(row);
-
-  const btn = createEl(
-  "button",
-  "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-  ["Start mistakes set"]
-);
-
-  btn.addEventListener("click", () => {
-    const limit = Number(countInput.value || 10);
-    startPractice({ mode: "mistakes", limit });
-  });
-  card.appendChild(btn);
-
-  grid.appendChild(card);
-})();
-
-        // Spaced repetition
-        (function () {
-          const card = createEl(
-            "div",
-            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
-            []
-          );
-          card.appendChild(
-            createEl("p", "text-xs font-semibold text-gray-900", [
-              "Spaced repetition",
-            ])
-          );
-          const subtitle = createEl(
-            "p",
-            "text-sm text-gray-600",
-            ["SR keeps concepts fresh with short daily reviews."]
-          );
-          card.appendChild(subtitle);
-
-          const statsLine = createEl(
-            "p",
-            "text-sm text-gray-600",
-            ["Loading SR stats..."]
-          );
-          card.appendChild(statsLine);
-
-          (AppState.user
-            ? SpacedRepetition.getStats(AppState.user.uid)
-            : Promise.resolve({ disabledNoLogin: true })
-          )
-            .then((stats) => {
-              if (stats.disabledNoLogin) {
-                statsLine.textContent =
-                  "Disabled in no-login practice mode because progress is not saved.";
-                return;
-              }
-              statsLine.textContent = `Total cards: ${
-                stats.totalCards || 0
-              } · Due now: ${stats.dueNow || 0} · Due soon: ${
-                stats.dueSoon || 0
-              } · Mastered: ${stats.mastered || 0}`;
-            })
-            .catch((e) => {
-              console.error("SR stats error", e);
-              statsLine.textContent =
-                "Unable to load SR stats right now. You can still review.";
-            });
-
-          const btn = createEl(
-            "button",
-            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-            ["Start SR review"]
-          );
-          btn.addEventListener("click", () => {
-            startPractice({ mode: "sr" });
-          });
-          card.appendChild(btn);
-
-          grid.appendChild(card);
-        })();
-// Saved questions practice
-(function () {
-  const card = createEl(
-    "div",
-    "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
-    []
-  );
-  card.appendChild(
-    createEl("p", "text-xs font-semibold text-gray-900", [
-      "Saved questions",
-    ])
-  );
-  card.appendChild(
-    createEl("p", "text-sm text-gray-600", [
-      "Review questions you've saved during practice and assignments.",
-    ])
-  );
-
-  const row = createEl("div", "flex items-center gap-2 text-sm", []);
-  row.appendChild(
-    createEl("span", "text-sm text-gray-600", ["Questions:"])
-  );
-  const countInput = createEl(
-    "input",
-    "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm",
-    []
-  );
-  countInput.type = "number";
-  countInput.min = "5";
-  countInput.max = "30";
-  countInput.value = "10";
-  row.appendChild(countInput);
-  card.appendChild(row);
-
-  const btn = createEl(
-  "button",
-  "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-  ["Start saved set"]
-);
-
-  btn.addEventListener("click", () => {
-    const limit = Number(countInput.value || 10);
-    startPractice({ mode: "starred", limit });
-  });
-  card.appendChild(btn);
-
-  grid.appendChild(card);
-})();
-        // Timed practice
-        (function () {
-          const card = createEl(
-            "div",
-            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm",
-            []
-          );
-          card.appendChild(
-            createEl("p", "text-xs font-semibold text-gray-900", [
-              "Timed practice",
-            ])
-          );
-          card.appendChild(
-            createEl("p", "text-sm text-gray-600", [
-              "Simulate exam pressure with timed mixed sets.",
-            ])
-          );
-
-          const unitRow = createEl(
-            "div",
-            "flex items-center gap-2 text-sm",
-            []
-          );
+          const row = createEl("div", "flex flex-wrap items-center gap-2 text-xs", []);
           const unitSelect = createEl(
-  "select",
-  "flex-1 max-w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs truncate focus:outline-none focus:ring-1 focus:ring-blue-500",
-  []
-);
-          [
-            { value: "all", label: "All units" },
-            { value: "weak", label: "Weakest units" },
-          ].forEach((optData) => {
+            "select",
+            "flex-1 min-w-[160px] px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
+            []
+          );
+          const allOpt = document.createElement("option");
+          allOpt.value = "all";
+          allOpt.textContent = "All units";
+          unitSelect.appendChild(allOpt);
+          AP_UNITS.forEach((label, idx) => {
             const opt = document.createElement("option");
-            opt.value = optData.value;
-            opt.textContent = optData.label;
+            opt.value = String(idx + 1);
+            opt.textContent = `Unit ${idx + 1}`;
             unitSelect.appendChild(opt);
           });
-          AP_UNITS.forEach((label, idx) => {
-  const opt = document.createElement("option");
-  opt.value = String(idx + 1);
-  opt.textContent = `Unit ${idx + 1}: ${label}`;
-  unitSelect.appendChild(opt);
-});
 
-          unitRow.appendChild(
-            createEl("span", "text-sm text-gray-600", ["Mode:"])
-          );
-          unitRow.appendChild(unitSelect);
-          card.appendChild(unitRow);
-
-          const countRow = createEl(
-            "div",
-            "flex items-center gap-2 text-sm mt-1",
-            []
-          );
           const countInput = createEl(
             "input",
-            "w-20 px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+            "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
             []
           );
           countInput.type = "number";
           countInput.min = "5";
-          countInput.max = "50";
-          countInput.value = "20";
-          countRow.appendChild(
-            createEl("span", "text-sm text-gray-600", ["Questions:"])
-          );
-          countRow.appendChild(countInput);
-          card.appendChild(countRow);
+          countInput.max = "75";
+          countInput.value = "15";
 
-          const timeRow = createEl(
-            "div",
-            "flex items-center gap-2 text-sm mt-1",
+          const timeInput = createEl(
+            "input",
+            "w-16 px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500",
             []
           );
-          const timeSelect = createEl(
-            "select",
-            "px-2 py-1.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500",
-            []
-          );
-          [15, 20, 30, 45, 60].forEach((m) => {
-            const opt = document.createElement("option");
-            opt.value = String(m);
-            opt.textContent = `${m} min`;
-            timeSelect.appendChild(opt);
-          });
-          timeRow.appendChild(
-            createEl("span", "text-sm text-gray-600", ["Time:"])
-          );
-          timeRow.appendChild(timeSelect);
-          card.appendChild(timeRow);
+          timeInput.type = "number";
+          timeInput.min = "5";
+          timeInput.max = "90";
+          timeInput.value = "20";
+
+          row.appendChild(unitSelect);
+          row.appendChild(countInput);
+          row.appendChild(createEl("span", "text-gray-500", ["questions"]));
+          row.appendChild(timeInput);
+          row.appendChild(createEl("span", "text-gray-500", ["minutes"]));
+          card.appendChild(row);
 
           const btn = createEl(
             "button",
             "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
-            ["Start timed set"]
+            ["Begin timed review"]
           );
           btn.addEventListener("click", () => {
-            const unitMode = unitSelect.value || "all";
-            const questionCount = Number(countInput.value || 20);
-            const timeLimitMinutes = Number(timeSelect.value || 20);
-            startTimedPractice({ unitMode, questionCount, timeLimitMinutes });
+            startTimedPractice({
+              unitMode: unitSelect.value || "all",
+              questionCount: Number(countInput.value || 15),
+              timeLimitMinutes: Number(timeInput.value || 20),
+            });
           });
           card.appendChild(btn);
+          grid.appendChild(card);
+        })();
 
+        // Full MC exam simulation
+        (function () {
+          const card = createEl(
+            "div",
+            "bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm md:col-span-2",
+            []
+          );
+          card.appendChild(
+            createEl("p", "text-xs font-semibold text-gray-900", ["Full MC exam simulation"])
+          );
+          card.appendChild(
+            createEl("p", "text-sm text-gray-600", [
+              "Run a 75-question, 90-minute AP Psychology multiple-choice simulation. Results are shown on screen only.",
+            ])
+          );
+
+          const btn = createEl(
+            "button",
+            "mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+            ["Begin exam simulation"]
+          );
+          btn.addEventListener("click", () => startFullExam());
+          card.appendChild(btn);
           grid.appendChild(card);
         })();
 
@@ -9887,7 +9686,7 @@ function renderAssignmentStatusDetail(
         const subtitle = $("user-subtitle");
         if (subtitle) {
           if (AppState.role === "teacher") subtitle.textContent = "Teacher mode";
-          else subtitle.textContent = "Practice mode · no student login";
+          else subtitle.textContent = "No login · no student data collected";
         }
 
         const logoutBtn = $("logout-btn");
@@ -9899,7 +9698,7 @@ function renderAssignmentStatusDetail(
         }
 
         if (PRACTICE_ONLY_STUDENT_MODE && AppState.role === "student" && !AppState.user) {
-          SyncUI.set("live", "Practice only");
+          SyncUI.set("live", "No student data saved");
         }
       }
 
@@ -9969,7 +9768,7 @@ function renderAssignmentStatusDetail(
         const spans = pill.querySelectorAll("span");
         if (spans[1]) {
           spans[1].textContent =
-            AppState.role === "teacher" ? "Teacher" : "Practice";
+            AppState.role === "teacher" ? "Teacher" : "No login";
         }
       }
 
@@ -10103,7 +9902,7 @@ auth.onAuthStateChanged(async (user) => {
 
   const subtitle = $("user-subtitle");
   if (subtitle) {
-  const modeLabel = `${AppState.role === "teacher" ? "Teacher" : "Practice"} mode`;
+  const modeLabel = `${AppState.role === "teacher" ? "Teacher" : "No login"} mode`;
   subtitle.textContent = modeLabel;
 
 }
